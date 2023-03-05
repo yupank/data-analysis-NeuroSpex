@@ -11,9 +11,7 @@
  * @author yp
  */
 
-import static SpecSeries.findSigXhigh;
-import static SpecSeries.findSigXlow;
-import static SpecSeries.findSigYlow;
+
 import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.Font;
@@ -84,12 +82,12 @@ public class SpecPanel extends JPanel
     private int nSeries;
     private int nPlot;
     private int nSlope;
-    final int MAXSWEEP = 500;      //max sweeps to show
-    final int MAXSPEC = 200;
+    final int MAXSWEEP = 512;      //max sweeps to show
+    final int MAXSPEC = 128;
     private int[] xPlot;
     private int[] yPlot;
-    final int MAXPOINT = 5000;     // max data point to plot
-    final int nPen = 10;
+    final int MAXPOINT = 4096;     // max data point to plot
+    final int nPen = 12;
     private Color[] penColor;
     
     
@@ -103,9 +101,9 @@ public class SpecPanel extends JPanel
         plotRect = new Rectangle();
         axesParam= new double[4];
         penColor = new Color[nPen];
-        penColor[0]=Color.magenta;  penColor[1]=Color.black; penColor[2]=Color.orange; penColor[3]=Color.blue;
-        penColor[4]=Color.gray;     penColor[4]=Color.RED;   penColor[5]=Color.green; penColor[6]=Color.YELLOW;
-        penColor[7]=Color.darkGray; penColor[8]=Color.cyan; penColor[9]=Color.PINK;
+        penColor[0]=Color.magenta;  penColor[1]=Color.darkGray; penColor[2]=Color.orange; penColor[3]=Color.blue;
+        penColor[4]=Color.black;     penColor[4]=Color.RED;   penColor[5]=Color.green; penColor[6]=Color.gray; penColor[7]=Color.getHSBColor((float)0.108,(float)0.76,(float)0.81);
+        penColor[8]=Color.getHSBColor((float)0.513,(float)0.95,(float)0.71); penColor[9]=Color.PINK; penColor[10]=Color.getHSBColor((float)0.5694, (float)0.36, (float)0.95); penColor[11]=Color.getHSBColor((float)0.85,(float)0.52,(float)0.68);
         // testing
         plotSweep = new SpecSweep[MAXSWEEP];
         dataSeries= new SpecSeries[MAXSPEC];
@@ -504,7 +502,7 @@ public class SpecPanel extends JPanel
         updateSweeps();
         
     }
-       public boolean detectPeaks(){
+    public boolean detectPeaks(){
         SpecSeries tagSeries = getSelectedSeries();
         int i,j,nDestPoint, nTagPoint, nPeak;
         String[] userPars;
@@ -515,6 +513,7 @@ public class SpecPanel extends JPanel
         float[] Filter  = {SpecSeries.findSigXhigh,SpecSeries.findSigXlow, SpecSeries.findSigYlow, 0};
         float dW = (float)1.5*Filter[0];
         int[] swpNum = new int[2];
+        nPeak = 0;
         if (tagSeries != null){
             int nSweep = tagSeries.getCompSize();
             nTagPoint = tagSeries.getDataSize();
@@ -558,6 +557,7 @@ public class SpecPanel extends JPanel
             addSeries(nDestPoint,"PeakSet:"+tagSeries.getTitle().substring(0, 8));
             //data series for storing the detected peaks
             SpecSeries destSeries = dataSeries[nSeries-1];
+            
             //calculating x-base for the data windows surrounding each peak
             crX = tagSeries.getXBase();
             float xShift = crX[0];
@@ -568,20 +568,41 @@ public class SpecPanel extends JPanel
                 destX[j] = crX[j];
             for (j=findPeakStart;j<=findPeakEnd;j++){
                 // searching for local peaks
-                nPeak = tagSeries.GatherPeaks(j, destSeries);
-                System.out.println(nPeak);
+                tagSeries.selComp(0,1);
+                tagSeries.selComp(j,0);
+                tagSeries.setTagComp(j);
+                //System.out.println("tag comp: "+tagSeries.TagComp);
+                nPeak += tagSeries.GatherPeaks(j, destSeries,locX);
+                //parentFrame.updateSweepTableRowSelection(j, false);
+                //parentFrame.updateSweepTableRowSelection(j+1, true);
+                parentFrame.updateDataInfo();
+                parentFrame.updateSweepSelection();
+                //JOptionPane.showMessageDialog(this, "sweep:"+String.format("%d",j)+ " found  "+String.format("%d",nPeak)+" peaks","Peak search",JOptionPane.INFORMATION_MESSAGE);
             }
+            if (destSeries.getCompSize()>2)
+                destSeries.removeComp(1);
             for (j=0;j<nTagPoint;j++)
                 crX[j] += xShift;          
             findPeakStart = findPeakEnd + 1; findPeakEnd = nSweep-1;
             if (findPeakStart >= nSweep){
                  findPeakStart = 0; findPeakEnd = 0;
-            }    
-            return false;
+            }
+            if (nPeak > 0){
+                dataSeries[nSeries-1].IsSelected = true;
+                for (i=0;i<nSeries-1;i++)
+                            dataSeries[i].IsSelected=false;
+                JOptionPane.showMessageDialog(this,  " total  "+String.format("%d",nPeak)+" peaks","Peak search",JOptionPane.INFORMATION_MESSAGE);
+                return true;
+            }
+            else    
+                return false;
         }
         else
             return false;
     }
+    public void fitThrough(){
+        
+    }  
     public void drawAxes(Graphics g){
         double tick1, tick2;
         int x1,x2,y1,y2,x3,y3,lableW,lableH;
@@ -1211,7 +1232,6 @@ public class SpecPanel extends JPanel
                             ln++;
                         }
                         else {
-                            //System.out.println("bad chars at line"+ln);
                             ln++;
                         }
                 }
@@ -1284,11 +1304,6 @@ public class SpecPanel extends JPanel
                                     }
                                     
                                 }
-                               //dataBuf.clear();
-                               //dataBuf.rewind();
-                               
-                               
-                               
                             }
                            
                         }
@@ -1530,11 +1545,17 @@ public class SpecPanel extends JPanel
             drawAxes(g);
             
             //calculating the scales and drawing the data series
-            for (i=0;i<nPlot;i++){
+            for (i=1;i<nPlot;i++){
                 clr=i%nPen;
                 g.setColor(penColor[clr]);
                 drawSweep(g,i);
             }
+            if (nPlot==1){
+                g.setColor(penColor[11]);
+            }
+            else
+                g.setColor(penColor[0]);
+            drawSweep(g,0);
             //drawing secondary markers
             axesParam[0]=xAxisBeg; axesParam[1]=xAxisScale; axesParam[2]=yAxisBeg; axesParam[3]=yAxisScale;
             nMark=getSelectedSeries().getMarks2Plot(xPlot, yPlot, axesParam, plotRect);

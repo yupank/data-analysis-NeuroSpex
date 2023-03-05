@@ -387,27 +387,32 @@ public class SpecSeries {
             }
 	}
 	if (jSel==0 && Count>1 )jSel=1;
+        
 	return jSel;
     }
-    public float FindPeaks(int tagComp){
+    public float FindPeaks(int tagComp, float[] locX){
         int Count,j,i,jSel, newMode;
         float[] peakLoc;
         float Sigma = -1;
         float[] Filter  = {findSigXhigh,findSigXlow, findSigYlow, 0}; //{0.001,25,1.2,4.9,3,1,0};
-        peakLoc = new float[100];
+        if (locX != null)
+            peakLoc = locX;
+        else
+            peakLoc = new float[100];
         int oldMode = NeuroSpex.currFitPar.getMode();
         float oldPar[] = new float[FitParam.nFitPar];
         float newPar[] = new float[FitParam.nFitPar];
         NeuroSpex.currFitPar.getPar(oldPar);
         if (tagComp < 0){
             jSel = findSelComp(BegFitComp);
-        if (jSel ==0 ) jSel = 1;
-        if (BegFitComp < NSComp)
-            clearAllComp(BegFitComp);
+            if (jSel ==0 ) jSel = 1;
+            if (BegFitComp < NSComp)
+                clearAllComp(BegFitComp);
         }
         else
             jSel = tagComp;
-        
+        //TagComp = jSel;
+        //System.out.println("FiC TgC "+TagComp);
         if (BcgrComp == null) {
             BcgrComp = new SpecSweep(SpecBase, NSPoint);          
         }
@@ -425,7 +430,7 @@ public class SpecSeries {
                 }
                 else {
                     //neurosci data
-                    newPar[0] = peakLoc[i]-1; newPar[1] = 1;  newPar[2] = 7;
+                    newPar[0] = peakLoc[i]; newPar[1] = 1;  newPar[2] = 7;
                     if(findSigInw) newMode = FitParam.RIDEC_I;
                         else newMode = FitParam.RIDEC_O;
                 }
@@ -442,16 +447,53 @@ public class SpecSeries {
                     if (SpecComp[j].Amp < 0.3*Filter[3]*Filter[2])
                         removeComp(j);
             }
+            //selComp(0,1); selComp(jSel,0);
                 
         }
         return Sigma;
     }
     
-    public int GatherPeaks(int tagComp, SpecSeries destSeries){
+    public int GatherPeaks(int tagComp, SpecSeries destSeries, float[] locX){
+        SpecSweep crPeakSweep;
+        int j,jBeg,jEnd;
+        float xPos, xShift;
         int Count = 0;
-        FindPeaks(tagComp);
+        float[] peakPar = new float[FitParam.nFitPar];
+        int destN = destSeries.NSPoint;
+        xShift = destSeries.SpecBase[0]*3/4 + destSeries.SpecBase[destN-1]/4;
+        setTagComp(tagComp);
+        FindPeaks(-1, locX);
+        for (j=BegFitComp; j< NSComp; j++){
+            FitParam sweepParam = SpecComp[j].getFitParam();
+            sweepParam.getPar(peakPar);
+            xPos = peakPar[0];
+            jBeg = SpecComp[j].getNearestIdx(xPos-xShift);
+            crPeakSweep = destSeries.createComp(destN);
+            if (jBeg+destN > NSPoint){
+                
+                jBeg = NSPoint - destN;
+                peakPar[0] = xShift*4 - (SpecBase[NSPoint-1]-xPos);
+                //fit param - Beg = xPos - xBase[jBeg]
+                System.out.print("x pos: "+ peakPar[0]);
+                sweepParam.getLimL(peakPar);
+                System.out.print(" lim low: "+ peakPar[2]);
+                sweepParam.getLimH(peakPar);
+                System.out.println(" lim high: "+ peakPar[2]);
+            }
+            else {
+                peakPar[0] = xShift;
+            }
+            sweepParam.setPar(peakPar);
+            sweepParam.getLimH(peakPar);
+            peakPar[0] = xShift*4;
+            sweepParam.setLimH(peakPar);
+            crPeakSweep.pasteFitParam(sweepParam);
+            crPeakSweep.copyDataAtIdx(SpecComp[tagComp], jBeg);
+            crPeakSweep.recTime = SpecComp[tagComp].recTime + xPos/1000;
+        }
+      
         Count = NSComp - BegFitComp;
-        System.out.println(destSeries.NSComp);
+        //System.out.println(destSeries.NSComp);
         // cut strech of data, surroding the found peak and populate the destination series
         return Count;
     }
@@ -598,6 +640,7 @@ public class SpecSeries {
         double[] B = new double[N+1];
         double[] Y = new double[N+1];
         float[] res = new float[N*(FitParam.nFitPar+1)+1];
+
 	if (testMode==FitParam.TEST_LLH) {
             j=TagComp;
             Sigma=(float)0.0001*SpecComp[j].LikelyHoodTest(SpecComp[BegFitComp]); //((SpecComp+j)->LikeHoodTest(SpecParam+BegFitComp));
@@ -1200,7 +1243,6 @@ public class SpecSeries {
             return true;
         }
         else { 
-            //TagComp=BegFitComp-1;
             return false;
         }
     }
@@ -1232,18 +1274,20 @@ public class SpecSeries {
     public void selCompAtIdx(int Idx, boolean state){
         if ((Idx>=0)&&(Idx<NSComp)) {
             if (state) {
+                
                SpecComp[Idx].Select=1;
                NSelComp++;
             }
             else {
                 SpecComp[Idx].Select=0;
                 NSelComp--;
+                
             }
         }
     }
     
     //replaces legacy method SelCompIndex
-    public void setSelectionList(int[] destNum, int count){
+    public void setSelectionFromList(int[] destNum, int count){
         int NN;
         if (count >0)
             NN=count;
@@ -1252,7 +1296,9 @@ public class SpecSeries {
         if (NN>0) {
             deSelectAll();
             for (int i=0;i<NN;i++)
-                if (destNum[i]<NSComp) selCompAtIdx(destNum[i],true);
+                if (destNum[i]<NSComp) {
+                    selCompAtIdx(destNum[i],true);
+                }
         }
     }
     public void setTitle(String newTitle) { Title = newTitle;}

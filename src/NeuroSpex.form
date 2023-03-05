@@ -13,9 +13,6 @@
           <Rectangle value="[200, 400, 440, 320]"/>
         </Property>
         <Property name="name" type="java.lang.String" value="fitSetDialog" noResource="true"/>
-        <Property name="preferredSize" type="java.awt.Dimension" editor="org.netbeans.beaninfo.editors.DimensionEditor">
-          <Dimension value="[448, 300]"/>
-        </Property>
       </Properties>
 
       <Layout>
@@ -638,6 +635,14 @@
               </Properties>
               <Events>
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="DataFitSettings"/>
+              </Events>
+            </MenuItem>
+            <MenuItem class="javax.swing.JMenuItem" name="FitThrough">
+              <Properties>
+                <Property name="text" type="java.lang.String" value="Fit peaks"/>
+              </Properties>
+              <Events>
+                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="DataFitThrough"/>
               </Events>
             </MenuItem>
           </SubComponents>

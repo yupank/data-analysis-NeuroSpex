@@ -399,13 +399,28 @@ public class SpecSweep {
     
     public void pasteFitParam(FitParam destPar){
         if(destPar!=null)
+        {
+            if (Param == null)
+                Param = new FitParam();
             Param.setParam(destPar);
+        }
         
     }
     public void copyFitParam(FitParam destPar){
         if(Param!=null)
             destPar.setParam(Param);
         
+    }
+    public int copyDataAtIdx(SpecSweep tagSweep, int tagIdx){
+        int count = 0;
+        if (tagIdx+NPoint <= tagSweep.NPoint){
+            for (int j=0;j<NPoint;j++){
+                Data[j] = tagSweep.Data[tagIdx+j];
+                count ++;
+            }
+            updateScale();
+        }
+        return count;
     }
     
     
@@ -437,6 +452,7 @@ public class SpecSweep {
         return FitResult;
     }
     public void setFitResult(float[] values){
+        //results are collection of component amplitude, followed by the conventinal FitParams
         if (nFitResult < values.length ){
             FitResult = new float[values.length];
         }

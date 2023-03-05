@@ -160,14 +160,14 @@ public class NeuroSpex extends javax.swing.JFrame {
     
     
     public void updateSweepSelection(){
-        
+    // updates the section of sweeps in the current view (SpecPanel) accordingly the selection of rows in the parameter table    
         int i,j,nCol;
         nCol=specTableModel.getColumnCount();
         Object [] rowData=new Object[nCol];   
         int[] selRow=SpecTable.getSelectedRows();
         SpecSeries buffSeries=currViewPanel.getDataSeries(currViewPanel.focusSer);
         if (buffSeries!=null){
-            buffSeries.setSelectionList(selRow,0);
+            buffSeries.setSelectionFromList(selRow,0);
             currViewPanel.updateSweeps();
             if (currViewPanel.autoScaleX)
                 currViewPanel.resetScaleX(false, false);
@@ -186,25 +186,38 @@ public class NeuroSpex extends javax.swing.JFrame {
             for (j=2;j<8;j++)
                SpecTable.setValueAt(rowData[j], selRow[i], j); 
         }
-        
+        currViewPanel.repaint();
     }
-    
+    public void updateSweepTableRowSelection(int rowIdx, boolean setSelected){
+        if(setSelected)
+            SpecTable.getSelectionModel().addSelectionInterval(rowIdx, rowIdx);
+        else
+            SpecTable.getSelectionModel().removeSelectionInterval(rowIdx, rowIdx);
+    }
     public void updateSweepTable(int rowIdx){
+        //updates the sweep parameter table selection and entries at specified index
+        //to show information from the selected data series, negative index updates the whole table
         int nCol, nRow, sel,i;
         nCol=specTableModel.getColumnCount();
         Object [] rowData=new Object[nCol];    
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
         nRow=specTableModel.getRowCount();
-        for (i=nRow-1;i>=0;i--)
-            specTableModel.removeRow(i);
         if(currViewPanel!=null){
             if (currViewPanel.focusSer>=0){
                 SpecSeries currSeries=currViewPanel.getDataSeries(currViewPanel.focusSer);
-               if (rowIdx<0){
+                if (rowIdx>0){
+                    SpecTable.getSelectionModel().addSelectionInterval(rowIdx, rowIdx);
+                    //System.out.println("selecting table at: "+rowIdx);
+                   
+                }
+                else {        
+                    for (i=nRow-1;i>=0;i--)
+                        specTableModel.removeRow(i);
                     nRow=currSeries.getCompSize();
                     for (i=0;i<nRow;i++){
                         sel=currSeries.getSweepTableData(rowData, i);
                         if (sel>-1){
+                            //because of that, whole table needs updating (impossible just to change single row)
                             specTableModel.addRow(rowData);
                             if (sel>0){
                                 SpecTable.getSelectionModel().addSelectionInterval(i, i);
@@ -221,7 +234,6 @@ public class NeuroSpex extends javax.swing.JFrame {
                 }
             }
         }
-        
     }
     
     /**
@@ -331,13 +343,13 @@ public class NeuroSpex extends javax.swing.JFrame {
         DataFindPeak = new javax.swing.JMenuItem();
         DataPeaksAnalysis = new javax.swing.JMenuItem();
         FitSettings = new javax.swing.JMenuItem();
+        FitThrough = new javax.swing.JMenuItem();
 
         FitSetDlg.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
         FitSetDlg.setTitle("Peak Search and Analysis Settings");
         FitSetDlg.setAlwaysOnTop(true);
         FitSetDlg.setBounds(new java.awt.Rectangle(200, 400, 440, 320));
         FitSetDlg.setName("fitSetDialog"); // NOI18N
-        FitSetDlg.setPreferredSize(new java.awt.Dimension(448, 300));
 
         fitSetOKBtn.setBackground(new java.awt.Color(204, 236, 220));
         fitSetOKBtn.setText("OK");
@@ -1218,6 +1230,14 @@ public class NeuroSpex extends javax.swing.JFrame {
         });
         DataMenu.add(FitSettings);
 
+        FitThrough.setText("Fit peaks");
+        FitThrough.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                DataFitThrough(evt);
+            }
+        });
+        DataMenu.add(FitThrough);
+
         jMenuBar1.add(DataMenu);
 
         setJMenuBar(jMenuBar1);
@@ -1502,7 +1522,7 @@ public class NeuroSpex extends javax.swing.JFrame {
             //updateDataInfo();
             //System.out.println("key");
             updateSweepSelection();
-            currViewPanel.repaint();
+            //currViewPanel.repaint();
         }
     }//GEN-LAST:event_SpecTableKeyPressed
 
@@ -1864,7 +1884,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         if (currViewPanel!=null){
             //currViewPanel.getSelectedSeries().Subtrack(false);
             currViewPanel.getSelectedSeries().setTagComp(SpecTable.getSelectedRow());
-            float accur = currViewPanel.getSelectedSeries().FindPeaks(-1);
+            float accur = currViewPanel.getSelectedSeries().FindPeaks(-1, null);
             if (accur > 0) {
                 FitAccurTxt.setText(String.format("Accuracy: %2.2f %s", accur*100,'%'));
                 FitAccurTxt.setEnabled(true);
@@ -1930,6 +1950,18 @@ public class NeuroSpex extends javax.swing.JFrame {
                 if(SpecSeries.findSigGauss) fitSetGauss.doClick();
                     else fitSetOutward.doClick();
     }//GEN-LAST:event_DataFitSettings
+
+    private void DataFitThrough(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_DataFitThrough
+        currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
+        currViewPanel.getSelectedSeries().selComp(0,1);
+        for (int j=0;j<15;j++){
+            currViewPanel.getSelectedSeries().selComp(j,0);
+            updateSeriesList(); //needed becase new series has been created
+            updateDataInfo();
+            currViewPanel.repaint();
+        }
+                 
+    }//GEN-LAST:event_DataFitThrough
 
     /**
      * @param args the command line arguments
@@ -2004,6 +2036,7 @@ public class NeuroSpex extends javax.swing.JFrame {
     private javax.swing.JTable FitParamTable;
     private javax.swing.JDialog FitSetDlg;
     private javax.swing.JMenuItem FitSettings;
+    private javax.swing.JMenuItem FitThrough;
     private javax.swing.JMenuItem InsertSweep;
     private javax.swing.JTabbedPane MainTabViewPane;
     private javax.swing.JList<String> ParamList;
