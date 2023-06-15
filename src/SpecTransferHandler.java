@@ -49,10 +49,7 @@ public class SpecTransferHandler extends TransferHandler {
     public boolean copyData2Sys(){
         Clipboard clb=toolkit.getSystemClipboard();
         NeuroSpex.clbdSpec=parentSpec.getSelectedSeries();  // setting the reference to the data-handling series
-        String outValue = parentSpec.getSelectedSeries().data2text(false);
-        
-      
-        //outValue+="\t"+parentSpec.getName()+"\t"+parentSpec.getDataSize();
+        String outValue = parentSpec.getSelectedSeries().data2text(false, "\t");
         Transferable transfer = new StringSelection(outValue);
         try {
             clb.setContents(transfer,(ClipboardOwner)transfer);
@@ -62,11 +59,12 @@ public class SpecTransferHandler extends TransferHandler {
         }            
         return true;
     }
-    public boolean copyResults2Sys(){
+    //method copies the fit results, if exist, for all sweeps to the sustem clipboard using tab as delimiter
+    public boolean copyResults2Sys(boolean[] resultMask){
         Clipboard clb=toolkit.getSystemClipboard();
         //String outValue = "here are some results for you";
         //Transferable transfer = new StringSelection(outValue);
-        Transferable transfer = new StringSelection(parentSpec.getSelectedSeries().getScanResult(true));
+        Transferable transfer = new StringSelection(parentSpec.getSelectedSeries().getFitResults(resultMask));
         try {
             clb.setContents(transfer,(ClipboardOwner)transfer);
         } catch (IllegalStateException ufe) {
@@ -75,6 +73,7 @@ public class SpecTransferHandler extends TransferHandler {
         }            
         return true;
     }
+    
     public boolean importData(TransferHandler.TransferSupport info) {
         String data;
         System.out.println("importData");

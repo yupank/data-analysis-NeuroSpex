@@ -71,9 +71,9 @@ public class FitParam {
         //ParH = new float[nTotPar];
         //Step = new float[nFitPar];
         Mode = RIDEC_I;
-        Par = new float[]{20,1,10,1,10,1,0,0};
+        Par = new float[]{30,1,10,1,10,1,0,0};
         ParL= new float[]{0,(float)0.1,3,0,0,1,0,0};
-        ParH= new float[]{100,30,90,5,20,10,0,0};
+        ParH= new float[]{120,30,90,5,20,10,0,0};
         Step= new float[]{(float)0.3,(float)0.25,(float)0.5,(float)0.3,0,0,0,0};
         modeName = new String[LORDIR-PARAM];
         modeName[RIDEC_I-PARAM-1]="Inward current"; modeName[RIDEC_O-PARAM-1]="Outward current";   modeName[UNIMODAL-PARAM-1]="Unimodal(gauss)";    modeName[BIMODAL-PARAM-1]="Bimodal(gauss)";
@@ -84,6 +84,7 @@ public class FitParam {
         setParName();
         
     }
+    
     public String getParNameAtIdx(int idx){
         if (idx>=0 && idx < nTotPar){
             return parName[idx];
@@ -105,6 +106,11 @@ public class FitParam {
         setPar(destPar.Par);
         Mode=destPar.Mode;
         setParName();
+    }
+    public void setValAtIdx(int idx, float value){
+        if (idx>=0 && idx < nTotPar){
+            Par[idx]=value;
+        }
     }
     public void setMode(int m){
         Mode=m;
@@ -208,6 +214,10 @@ public class FitParam {
             for (int j=0;j<n;j++)
                 val[j]=ParL[j];
     }
+    
+    public boolean parAtLimAtIdx(int idx){
+        return (Par[idx] == ParH[idx] || Par[idx] == ParL[idx]);
+    }
     public void setLimH(float[] val){
         int n=val.length;
         if (n>=nTotPar)
@@ -307,6 +317,7 @@ public class FitParam {
                        Par[j]=val[j];
             }          
     }
+    //copies all fit parameters values
     public void getPar(float[] val){
         int n=val.length;
         if (n>=nTotPar)
@@ -320,6 +331,7 @@ public class FitParam {
             for (int j=0;j<n;j++)
                 val[j]=Par[j];
     }
+    //copies fit parameters values staring from offset index
     public void getPar(float[] val, int offset, int nPar){
         int n = Math.min(nPar, nTotPar);
         for (int j=0; j<n;j++)

@@ -26,11 +26,14 @@ public class SpecSweep {
     public float Baseline; //baseline value averaged over the certain X-region, by default - first 20 data points
     public float Kf;    //coefficient in the least square fit
     public int Mode;    //type of theoretical curve
-    public int nFitResult;
+    
     // parameters for intialization and fitting of theoretical curves
     //first index = mnemonic type (depends on Mode), second index (0:2) - parameter and lower and high limits
     //set public for time efficiency, should be changed only via class methods
     private FitParam Param;
+    // output of fitting the data with theoretical curves, initialized as null
+    // follows same rules as fitParam ??
+    public int nFitResult;
     private float[] FitResult;
     
     
@@ -411,6 +414,8 @@ public class SpecSweep {
             destPar.setParam(Param);
         
     }
+    // this method copies the data from tagSweep strting from tagged sample index, 
+    // method is used for breaking long recordings into chewabale pieces and cutting-out spurious signals   
     public int copyDataAtIdx(SpecSweep tagSweep, int tagIdx){
         int count = 0;
         if (tagIdx+NPoint <= tagSweep.NPoint){
@@ -452,7 +457,7 @@ public class SpecSweep {
         return FitResult;
     }
     public void setFitResult(float[] values){
-        //results are collection of component amplitude, followed by the conventinal FitParams
+        //results are collection of component amplitude, followed by the conventional FitParams
         if (nFitResult < values.length ){
             FitResult = new float[values.length];
         }
@@ -605,16 +610,17 @@ public class SpecSweep {
             N=tagComp.NPoint;
         else    N=NPoint;
         for (j=0;j<N;j++){
-            Y_A= Math.abs(Data[j]-offset);
-            Y_B= Math.abs(tagComp.Data[j]-offset);
-            //S_Aver+=Math.abs(Y_A)+Math.abs(Y_B);
-            S_Aver+=Y_A+Y_B;
+
+            Y_A= Data[j]-offset;
+            Y_B= tagComp.Data[j]-offset;
+            S_Aver+=Math.abs(Y_A)+Math.abs(Y_B)+offset;
+            
             Y_A-=Y_B;
             S_Diff+=Y_A*Y_A;
         }
         S_Aver+=FitParam.MinFloat;
         S_Diff+=FitParam.MinFloat;
-	S=(float)(2*Math.sqrt(S_Diff*N)/S_Aver);
+        S=(float)(Math.sqrt(2*S_Diff*N)/S_Aver);
         return S;
     }
     public float normLLH(SpecSweep tagComp){ // log-likelyhood
@@ -838,7 +844,7 @@ public class SpecSweep {
         res/=count;
         return res;    
     }
-    //reports basic statistics: res[0:2] = mean, SD & slope 
+    //reports basic statistics: res[0:2] = {mean, SD , slope}
     public boolean Scan(float[] res, int BegPoint, int EndPoint){
         //
         float Mean, SD, Y,S,S1,S2,Extrem, X;

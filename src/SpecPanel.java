@@ -509,7 +509,7 @@ public class SpecPanel extends JPanel
         int totPeak=0;
         float[] locX = new float[200];
         float [] crX, crY; // leading arrays for shifting data windows
-        float [] destX, destY; // lagging arreay for shifting data windows
+        float [] destX, destY; // lagging array for shifting data windows
         float[] Filter  = {SpecSeries.findSigXhigh,SpecSeries.findSigXlow, SpecSeries.findSigYlow, 0};
         float dW = (float)1.5*Filter[0];
         int[] swpNum = new int[2];
@@ -553,7 +553,7 @@ public class SpecPanel extends JPanel
             }
             //creating new data series to hold the peaks
             //searching and creating peaks 
-            nDestPoint = tagSeries.getCompAtIdx(0).getNearestIdx(4*dW) - tagSeries.getCompAtIdx(0).getNearestIdx(0)-1;
+            nDestPoint = tagSeries.getCompAtIdx(0).getNearestIdx(3.3*dW) - tagSeries.getCompAtIdx(0).getNearestIdx(0)-1;
             addSeries(nDestPoint,"PeakSet:"+tagSeries.getTitle().substring(0, 8));
             //data series for storing the detected peaks
             SpecSeries destSeries = dataSeries[nSeries-1];
@@ -581,6 +581,11 @@ public class SpecPanel extends JPanel
             }
             if (destSeries.getCompSize()>2)
                 destSeries.removeComp(1);
+            //creating at least one theoreticl curve for data fit
+            NeuroSpex.currFitPar.setParam(destSeries.getCompAtIdx(1).getFitParam());
+            destSeries.createFitComp( NeuroSpex.currFitPar);
+            parentFrame.updateDataInfo();
+            
             for (j=0;j<nTagPoint;j++)
                 crX[j] += xShift;          
             findPeakStart = findPeakEnd + 1; findPeakEnd = nSweep-1;
@@ -600,8 +605,55 @@ public class SpecPanel extends JPanel
         else
             return false;
     }
+    // this methods goes through each data sweep of currently selected data series corrspondingly 
+    // calling SpecSeries AutoFit method and notifies user if fit quality is below set criteria
+    // depending on user input, methods fits data again with new initial paramaters 
+    // or accepts fit results with optional manual correction or discards the data (if it is a peak found by FindPeaks() method
+   
     public void fitThrough(){
-        
+        int userInput,tagComp;
+        float[] fitRes;
+        boolean fitStop = false;
+        SpecSeries tagSeries = dataSeries[getSelectedIdx()];
+        int endComp = tagSeries.BegFitComp;
+        tagComp = 1;
+        userInput = 1;
+        while (!fitStop){
+            if (tagSeries.setTagComp(tagComp)){
+                tagSeries.AutoFit();
+                parentFrame.updateFitAccurLabel(tagSeries.fitAccuracy,tagSeries.TagComp);
+                parentFrame.updateDataInfo();
+                repaint();
+                //  int   userInput = JOptionPane.showConfirmDialog(this, String.format("TagComp: %d nFitRes: %d",tagSeries.TagComp, nRes),
+                //                    "Continue to fit data ?", JOptionPane.YES_NO_CANCEL_OPTION);
+                //  fitStop = (userInput == JOptionPane.CANCEL_OPTION) || (tagComp>=endComp);
+                if (tagSeries.fitAccuracy > SpecSeries.fitAccurH || tagSeries.checkFitAtBorder()){
+                    userInput = parentFrame.DataFitResultAction(tagSeries);
+                    if (userInput == NeuroSpex.FIT_RETRY || userInput == NeuroSpex.FIT_ACCEPT ){
+                        parentFrame.getUserFitResult(tagSeries);
+                        if (userInput == NeuroSpex.FIT_RETRY){
+                            fitRes = tagSeries.getCompAtIdx(tagSeries.TagComp).getFitResult();
+                            tagSeries.convertFitResult2Par(fitRes);
+                            //going through the same sweep again
+                            tagComp--;
+                        }
+                    }
+                    else {
+                        if ( userInput == NeuroSpex.FIT_DISCARD ){
+                            tagSeries.removeComp(tagComp);
+                            tagComp--;
+                        }
+                       
+                    }
+                        //System.out.println("input: "+userInput);
+                }
+                fitStop = (userInput == NeuroSpex.FIT_STOP) || (tagComp>=endComp);
+                tagComp++;
+            }
+            else 
+                //reached the end of recorings
+                fitStop = true; 
+        }
     }  
     public void drawAxes(Graphics g){
         double tick1, tick2;
@@ -943,9 +995,22 @@ public class SpecPanel extends JPanel
             return false;
         
     }
-    public void writeASCII (File outFile){
-        String outStr = getSelectedSeries().data2text(true);
-        try (BufferedWriter writer = Files.newBufferedWriter(outFile.toPath(),StandardOpenOption.CREATE,StandardOpenOption.WRITE)) {
+    /*
+    public void writeASCII (File outFile, String delimiter){
+        String outStr = getSelectedSeries().data2text(true, delimiter);
+        try (BufferedWriter writer = Files.newBufferedWriter(outFile.toPath(),StandardOpenOption.CREATE,StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            writer.write(outStr, 0, outStr.length());
+            writer.close();
+        } catch (IOException x) {
+            System.err.format("IOException: %s%n", x);
+        }
+
+    }
+    */
+    public void writeASCII (File outFile, String delimiter){
+        
+        String outStr = getSelectedSeries().data2text(true, delimiter);
+        try (BufferedWriter writer = Files.newBufferedWriter(outFile.toPath(),StandardOpenOption.CREATE,StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
             writer.write(outStr, 0, outStr.length());
             writer.close();
         } catch (IOException x) {

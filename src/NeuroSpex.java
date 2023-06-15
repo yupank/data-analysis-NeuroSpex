@@ -14,11 +14,16 @@ import javax.swing.DefaultListSelectionModel;
 import javax.swing.table.DefaultTableModel;
 import java.awt.event.*;
 import java.awt.FileDialog;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import javax.swing.TransferHandler.TransferSupport;
 import javax.swing.JFileChooser;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.io.File;
+import java.io.InputStreamReader;
+import java.util.List;
 import javax.swing.Action;
 import javax.swing.ImageIcon;
 import javax.swing.JOptionPane;
@@ -35,12 +40,19 @@ public class NeuroSpex extends javax.swing.JFrame {
     private SpecPanel currViewPanel; // the data view, currently selected in the tabbed panel
     private int currViewIdx;
     private DefaultListModel seriesListModel,paramListModel;
-    private DefaultTableModel specTableModel;
+    private DefaultTableModel specTableModel, fitResTableModel;
     private String    workDirectory;
     
     public static SpecSeries clbdSpec; // internal clipboard
     public static FitParam currFitPar; // for transfer from back- to front-end 
-    //private ListSelectionModel seriesSelectionModel;
+    
+    //variable for user reactions to low quality data fit
+    public int fitResultUserAction;
+    public static final int FIT_STOP = 0;
+    public static final int FIT_DISCARD = FIT_STOP + 1;
+    public static final int FIT_RETRY = FIT_STOP + 2;
+    public static final int FIT_ACCEPT = FIT_STOP + 3;
+    
     public NeuroSpex() {
         int i;
         initComponents();
@@ -54,10 +66,11 @@ public class NeuroSpex extends javax.swing.JFrame {
         paramListModel = new DefaultListModel();
         ParamList.setModel(paramListModel);
         specTableModel=(DefaultTableModel) SpecTable.getModel();
+        fitResTableModel = (DefaultTableModel) FitResTable.getModel();
         SpecPanel.transferSeries=null;
         SpecPanel.transferDataSize=0;
         clbdSpec=null;
-        
+        fitResultUserAction = FIT_STOP-1;
         //SpecTable.getColumn(0).setWidth(10);
         //SpecTable.getColumn(1).setWidth(20);
         FitParamTable.getColumnModel().getColumn(0).setPreferredWidth(99);
@@ -82,6 +95,13 @@ public class NeuroSpex extends javax.swing.JFrame {
         frameLabel.setText(labStr);
         frameLabel.repaint();
     }
+    public void updateFitAccurLabel(float accuracy, int sweepIdx){
+            int cyc = SpecSeries.fitCrCycle+1;
+            int stp = SpecSeries.fitTotStep+1;
+            FitAccurTxt.setText(String.format("Sweep #%d Accuracy: %2.2f %s cycle %d step %d", sweepIdx, accuracy*100,'%',cyc,stp));
+            FitAccurTxt.setEnabled(true);
+            FitAccurTxt.repaint();
+    }
     public void updateFitParName(){
         int i=ParamList.getSelectedIndex();
         currFitPar.setMode(i+FitParam.PARAM+1);
@@ -90,12 +110,17 @@ public class NeuroSpex extends javax.swing.JFrame {
             FitParamTable.setValueAt(currFitPar.getParNameAtIdx(i), i, 0);
     }
     public void updateFitParValue(){
-        int i;
+        int i,idx;
         float[] val = new float[FitParam.nTotPar];
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
         if (currViewPanel!=null){
-            if(currViewPanel.focusSer>0)currViewPanel.getSelectedSeries().getSelFitParam(currFitPar);
+            if(currViewPanel.focusSer>=0){
+                idx = currViewPanel.getSelectedSeries().getSelFitParam(currFitPar);
+                //System.out.println("fit comp #"+idx);
+            }
+            
         }
+       
         ParamList.setSelectedIndex(currFitPar.getMode()-FitParam.PARAM-1);
         updateFitParName();
         currFitPar.getPar(val);
@@ -274,6 +299,16 @@ public class NeuroSpex extends javax.swing.JFrame {
         jLabel13 = new javax.swing.JLabel();
         fitSetGauss = new javax.swing.JRadioButton();
         fitSetBtnGroup1 = new javax.swing.ButtonGroup();
+        FitResultCtrlDlg = new javax.swing.JDialog();
+        jSeparator4 = new javax.swing.JSeparator();
+        jScrollPane5 = new javax.swing.JScrollPane();
+        FitResTable = new javax.swing.JTable();
+        FitResSweepTxt = new javax.swing.JLabel();
+        FitResCtrlRetryBtn = new javax.swing.JButton();
+        FitResCtrlAcceptBtn = new javax.swing.JButton();
+        FitResCtrlDiscardBtn = new javax.swing.JButton();
+        FitResCtrlStopBtn = new javax.swing.JButton();
+        FitResAccurTxt = new javax.swing.JLabel();
         jSplitPane1 = new javax.swing.JSplitPane();
         jPanel1 = new javax.swing.JPanel();
         MainTabViewPane = new javax.swing.JTabbedPane();
@@ -312,6 +347,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         FitLstSqrBtn = new javax.swing.JButton();
         FitAccurTxt = new javax.swing.JLabel();
         FitAutoBtn = new javax.swing.JButton();
+        FitSweepNum = new javax.swing.JLabel();
         jMenuBar1 = new javax.swing.JMenuBar();
         FileMenu = new javax.swing.JMenu();
         FileNew = new javax.swing.JMenuItem();
@@ -555,6 +591,123 @@ public class NeuroSpex extends javax.swing.JFrame {
                 .addContainerGap())
         );
 
+        FitResultCtrlDlg.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
+        FitResultCtrlDlg.setTitle("Low Fit Quality");
+        FitResultCtrlDlg.setBounds(new java.awt.Rectangle(990, 625, 360, 200));
+        FitResultCtrlDlg.setModal(true);
+        FitResultCtrlDlg.setName("fitResultDialog"); // NOI18N
+        FitResultCtrlDlg.setPreferredSize(new java.awt.Dimension(348, 190));
+        FitResultCtrlDlg.setSize(new java.awt.Dimension(360, 200));
+
+        FitResTable.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+                {null, null, null, null, null},
+                {null, null, null, null, null},
+                {null, null, null, null, null}
+            },
+            new String [] {
+                "FitComp", "Amp", "start at", "tRise", "tDecay"
+            }
+        ) {
+            Class[] types = new Class [] {
+                java.lang.Integer.class, java.lang.Float.class, java.lang.Float.class, java.lang.Float.class, java.lang.Float.class
+            };
+            boolean[] canEdit = new boolean [] {
+                false, true, true, true, true
+            };
+
+            public Class getColumnClass(int columnIndex) {
+                return types [columnIndex];
+            }
+
+            public boolean isCellEditable(int rowIndex, int columnIndex) {
+                return canEdit [columnIndex];
+            }
+        });
+        FitResTable.setColumnSelectionAllowed(true);
+        FitResTable.setGridColor(new java.awt.Color(204, 204, 204));
+        FitResTable.setShowGrid(true);
+        FitResTable.getTableHeader().setReorderingAllowed(false);
+        jScrollPane5.setViewportView(FitResTable);
+        FitResTable.getColumnModel().getSelectionModel().setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+
+        FitResSweepTxt.setText("Sweep:");
+
+        FitResCtrlRetryBtn.setText("Try again");
+        FitResCtrlRetryBtn.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                FitResCtrlRetryBtn(evt);
+            }
+        });
+
+        FitResCtrlAcceptBtn.setText("Accept");
+        FitResCtrlAcceptBtn.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                FitResCtrlAcceptBtn(evt);
+            }
+        });
+
+        FitResCtrlDiscardBtn.setText("Discard");
+        FitResCtrlDiscardBtn.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                FitResCtrlDiscardBtn(evt);
+            }
+        });
+
+        FitResCtrlStopBtn.setText("Stop");
+        FitResCtrlStopBtn.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                FitResCtrlStopBtn(evt);
+            }
+        });
+
+        FitResAccurTxt.setText("Accuracy: ");
+
+        javax.swing.GroupLayout FitResultCtrlDlgLayout = new javax.swing.GroupLayout(FitResultCtrlDlg.getContentPane());
+        FitResultCtrlDlg.getContentPane().setLayout(FitResultCtrlDlgLayout);
+        FitResultCtrlDlgLayout.setHorizontalGroup(
+            FitResultCtrlDlgLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addComponent(jSeparator4)
+            .addGroup(FitResultCtrlDlgLayout.createSequentialGroup()
+                .addGroup(FitResultCtrlDlgLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(FitResultCtrlDlgLayout.createSequentialGroup()
+                        .addContainerGap()
+                        .addGroup(FitResultCtrlDlgLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(FitResultCtrlDlgLayout.createSequentialGroup()
+                                .addComponent(FitResSweepTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(36, 36, 36)
+                                .addComponent(FitResAccurTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addComponent(jScrollPane5, javax.swing.GroupLayout.PREFERRED_SIZE, 336, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                    .addGroup(FitResultCtrlDlgLayout.createSequentialGroup()
+                        .addComponent(FitResCtrlRetryBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 83, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(FitResCtrlAcceptBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 79, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(FitResCtrlDiscardBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 83, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(18, 18, 18)
+                        .addComponent(FitResCtrlStopBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 67, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
+        FitResultCtrlDlgLayout.setVerticalGroup(
+            FitResultCtrlDlgLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, FitResultCtrlDlgLayout.createSequentialGroup()
+                .addGap(15, 15, 15)
+                .addGroup(FitResultCtrlDlgLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(FitResSweepTxt)
+                    .addComponent(FitResAccurTxt))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jScrollPane5, javax.swing.GroupLayout.PREFERRED_SIZE, 84, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jSeparator4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(FitResultCtrlDlgLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(FitResCtrlRetryBtn)
+                    .addComponent(FitResCtrlAcceptBtn, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(FitResCtrlDiscardBtn)
+                    .addComponent(FitResCtrlStopBtn))
+                .addGap(10, 10, 10))
+        );
+
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("NeuroSpex");
         setPreferredSize(new java.awt.Dimension(1350, 640));
@@ -652,7 +805,7 @@ public class NeuroSpex extends javax.swing.JFrame {
                 .addComponent(axisRightBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(axisResetBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 42, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(196, Short.MAX_VALUE))
+                .addContainerGap(193, Short.MAX_VALUE))
         );
         jPanel4Layout.setVerticalGroup(
             jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -680,8 +833,8 @@ public class NeuroSpex extends javax.swing.JFrame {
             .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                 .addGroup(jPanel1Layout.createSequentialGroup()
                     .addContainerGap()
-                    .addComponent(MainTabViewPane, javax.swing.GroupLayout.PREFERRED_SIZE, 689, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
+                    .addComponent(MainTabViewPane, javax.swing.GroupLayout.DEFAULT_SIZE, 686, Short.MAX_VALUE)
+                    .addContainerGap()))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -718,7 +871,7 @@ public class NeuroSpex extends javax.swing.JFrame {
 
             },
             new String [] {
-                "N", "Time", "Bottom", "Scale", "Scan", "SDscan", "Slope", "Cfn", "FitAmp", "tDec", "tRise", "Amp1", "tDec2", "tRise2", "Amp2"
+                "N", "Time", "Bottom", "Scale", "Scan", "SDscan", "Slope", "Cfn", "FitAmp", "tRise", "tDec", "Amp1", "tRise2", "tDec2", "Amp2"
             }
         ) {
             Class[] types = new Class [] {
@@ -875,7 +1028,7 @@ public class NeuroSpex extends javax.swing.JFrame {
 
         FitLstSqrBtn.setBackground(new java.awt.Color(204, 204, 255));
         FitLstSqrBtn.setFont(new java.awt.Font("Lucida Grande", 0, 12)); // NOI18N
-        FitLstSqrBtn.setText("LeastSqr");
+        FitLstSqrBtn.setText("Least Sqr");
         FitLstSqrBtn.setEnabled(false);
         FitLstSqrBtn.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -905,7 +1058,7 @@ public class NeuroSpex extends javax.swing.JFrame {
                 .addContainerGap()
                 .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
-                        .addGap(0, 350, Short.MAX_VALUE)
+                        .addGap(0, 0, Short.MAX_VALUE)
                         .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
                                 .addComponent(filler1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -919,21 +1072,25 @@ public class NeuroSpex extends javax.swing.JFrame {
                             .addComponent(CompSumBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 88, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(CompAveBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 88, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(CompAlignBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 88, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addGroup(jPanel3Layout.createSequentialGroup()
-                                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                .addComponent(SpecTitleTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 381, javax.swing.GroupLayout.PREFERRED_SIZE))
-                            .addGroup(jPanel3Layout.createSequentialGroup()
-                                .addComponent(CompApplyBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 88, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(10, 10, 10)
-                                .addComponent(jLabel1)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                .addComponent(FitCompTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(18, 18, 18)
-                                .addComponent(FitAccurTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 223, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                .addComponent(filler3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                            .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(SpecTitleTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 381, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 510, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addGap(168, 168, 168))
+                    .addGroup(jPanel3Layout.createSequentialGroup()
+                        .addComponent(CompApplyBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 88, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(10, 10, 10)
+                        .addComponent(jLabel1)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(FitCompTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(FitSweepNum, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(FitAccurTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 362, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(filler3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addContainerGap())
                     .addGroup(jPanel3Layout.createSequentialGroup()
                         .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(ComDelBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 88, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -946,30 +1103,28 @@ public class NeuroSpex extends javax.swing.JFrame {
                             .addGroup(jPanel3Layout.createSequentialGroup()
                                 .addComponent(FitLstSqrBtn)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(FitAutoBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 81, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                                .addComponent(FitAutoBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 97, javax.swing.GroupLayout.PREFERRED_SIZE)))
                         .addGap(0, 0, Short.MAX_VALUE))))
-            .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
-                    .addContainerGap(137, Short.MAX_VALUE)
-                    .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 499, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addGap(33, 33, 33)))
         );
         jPanel3Layout.setVerticalGroup(
             jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel3Layout.createSequentialGroup()
                 .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(SpecTitleTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addGroup(jPanel3Layout.createSequentialGroup()
                         .addContainerGap()
-                        .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 159, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(CompAlignBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(CompAveBtn)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(CompSumBtn)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(CompSubtrackBtn)
+                        .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 159, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(CompAlignBtn, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(CompAveBtn)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(CompSumBtn)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(CompSubtrackBtn))
+                    .addGroup(jPanel3Layout.createSequentialGroup()
+                        .addComponent(SpecTitleTxt, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 269, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanel3Layout.createSequentialGroup()
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -983,7 +1138,9 @@ public class NeuroSpex extends javax.swing.JFrame {
                         .addComponent(filler3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(FitAccurTxt)
+                            .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                .addComponent(FitAccurTxt)
+                                .addComponent(FitSweepNum))
                             .addGroup(jPanel3Layout.createSequentialGroup()
                                 .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
                                     .addComponent(FitCompTxt, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
@@ -997,26 +1154,18 @@ public class NeuroSpex extends javax.swing.JFrame {
                                             .addComponent(FitLstSqrBtn)
                                             .addComponent(FitAutoBtn)))
                                     .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 197, javax.swing.GroupLayout.PREFERRED_SIZE))))))
-                .addGap(41, 41, 41)
+                .addGap(46, 46, 46)
                 .addComponent(filler1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(93, 93, 93)
                 .addComponent(filler2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap())
-            .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
-                    .addContainerGap(30, Short.MAX_VALUE)
-                    .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 269, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addContainerGap(379, Short.MAX_VALUE)))
         );
 
         javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
         jPanel2Layout.setHorizontalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel2Layout.createSequentialGroup()
-                .addContainerGap()
-                .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+            .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, 723, Short.MAX_VALUE)
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1048,7 +1197,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         FileSave.setText("Save");
         FileSave.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                FileSaveActionPerformed(evt);
+                FileSave(evt);
             }
         });
         FileMenu.add(FileSave);
@@ -1129,6 +1278,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         CopyResMenu.add(CopyAmp);
 
         CopyTRise.setFont(new java.awt.Font("Lucida Grande", 0, 12)); // NOI18N
+        CopyTRise.setSelected(true);
         CopyTRise.setText("Rise time");
         CopyResMenu.add(CopyTRise);
 
@@ -1230,7 +1380,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         });
         DataMenu.add(FitSettings);
 
-        FitThrough.setText("Fit peaks");
+        FitThrough.setText("Fit All");
         FitThrough.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 DataFitThrough(evt);
@@ -1246,7 +1396,9 @@ public class NeuroSpex extends javax.swing.JFrame {
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jSplitPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 1379, javax.swing.GroupLayout.PREFERRED_SIZE)
+            .addGroup(layout.createSequentialGroup()
+                .addComponent(jSplitPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 1364, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1259,21 +1411,12 @@ public class NeuroSpex extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void FileNewActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileNewActionPerformed
-        // TODO add your handling code here:
+
         SpecPanel bufViewPanel = new SpecPanel((NeuroSpex)this);
         bufViewPanel.setTitle("Data Set "+(totSpecViewTab+1));
-        // if the system clipboard contains suitable data
 
-        /*
-        currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
-        if (currViewPanel.transferHandler.pasteSysClb()){
-            currViewPanel.repaint();
-            updateDataInfo();
-        }
-        */
         MainTabViewPane.addTab("Data Set "+(totSpecViewTab+1), bufViewPanel);
         MainTabViewPane.setSelectedIndex(totSpecViewTab);
-
         totSpecViewTab++;
         updateDataInfo();
 
@@ -1284,6 +1427,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         //currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
         String extStr, titleStr;
         FileDialog fdLoad = new FileDialog (this, "Open File", FileDialog.LOAD);
+ 
         fdLoad.setVisible (true);
 
         File[] fileLoad=fdLoad.getFiles();
@@ -1326,21 +1470,34 @@ public class NeuroSpex extends javax.swing.JFrame {
 
     }//GEN-LAST:event_FileOpenActionPerformed
 
-    private void FileSaveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileSaveActionPerformed
+    private void FileSave(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileSave
         // TODO add your handling code here:
+        
+        /* with FileChooser
+        JFileChooser fc = new JFileChooser();
+        int returnVal = fc.showSaveDialog(this);
+
+        if (returnVal == JFileChooser.APPROVE_OPTION) {
+            File fileSave = fc.getSelectedFile();
+            currViewPanel.getSelectedSeries().saveComp2ASCII(fileSave, "\t");
+        }
+        */
         FileDialog fdLoad = new FileDialog (this, "Save File", FileDialog.SAVE);
+       
         fdLoad.setVisible (true);
         File[] fileSave=fdLoad.getFiles();
         if (fileSave.length>0){
             String dirName = fdLoad.getDirectory();
             String fileName =fdLoad.getFile ();
             currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
-            currViewPanel.writeASCII(fileSave[0]);
+            //currViewPanel.writeASCII(fileSave[0],"\t");
+            currViewPanel.getSelectedSeries().saveComp2ASCII(fileSave[0], "\t");
         }
+        
         //else
             //System.out.println("no file");
             
-    }//GEN-LAST:event_FileSaveActionPerformed
+    }//GEN-LAST:event_FileSave
 
     private void FileCloseActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileCloseActionPerformed
         // TODO add your handling code here:
@@ -1400,9 +1557,9 @@ public class NeuroSpex extends javax.swing.JFrame {
 
     private void EditCopyRes(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_EditCopyRes
         // TODO add your handling code here:
-        System.out.println("Copy Results");
+        boolean[] resTableMask = new boolean[]{true,false,true,true,false,true}; //{totAmp,4 main FitParams,Amp}
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
-        currViewPanel.transferHandler.copyResults2Sys();
+        currViewPanel.transferHandler.copyResults2Sys(resTableMask);
     }//GEN-LAST:event_EditCopyRes
 
     private void ToolsClip(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ToolsClip
@@ -1410,10 +1567,9 @@ public class NeuroSpex extends javax.swing.JFrame {
         boolean ignoreSel;
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
         if ((evt.getModifiers()& ActionEvent.SHIFT_MASK) !=0)
-        ignoreSel=true;
+            ignoreSel=true;
         else
-        ignoreSel=false;
-
+            ignoreSel=false;
         currViewPanel.clipArtifact(ignoreSel);
         updateDataInfo();
         currViewPanel.resetScaleY(false,false);
@@ -1787,9 +1943,9 @@ public class NeuroSpex extends javax.swing.JFrame {
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
         if (currViewPanel!=null){
             if(xToggleBtn.isSelected())
-            currViewPanel.updateScaleX(2);
+                currViewPanel.updateScaleX(2);
             else
-            currViewPanel.updateScaleY(2);
+                currViewPanel.updateScaleY(2);
             currViewPanel.repaint();
         }
     }//GEN-LAST:event_axisRightBtnActionPerformed
@@ -1848,10 +2004,10 @@ public class NeuroSpex extends javax.swing.JFrame {
             //currViewPanel.getSelectedSeries().Subtrack(false);
             currViewPanel.getSelectedSeries().setTagComp(SpecTable.getSelectedRow());
             float accur = currViewPanel.getSelectedSeries().LeastSqr(0);
-            FitAccurTxt.setText(String.format("Accuracy: %2.2f %s", accur*100,'%'));
+            FitAccurTxt.setText(String.format("Sweep #%d Accuracy: %2.2f %s", SpecTable.getSelectedRow(), accur*100,'%'));
             FitAccurTxt.setEnabled(true);
             FitAccurTxt.repaint();
-            //System.out.println("tag = "+currViewPanel.getSelectedSeries().TagComp + " begFit = " + currViewPanel.getSelectedSeries().BegFitComp);
+
             updateDataInfo();
             
             currViewPanel.repaint();
@@ -1861,17 +2017,11 @@ public class NeuroSpex extends javax.swing.JFrame {
     private void FitAuto(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FitAuto
 
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
+        SpecSeries tagSeries = currViewPanel.getSelectedSeries();
         if (currViewPanel!=null){
-            //currViewPanel.getSelectedSeries().Subtrack(false);
-            currViewPanel.getSelectedSeries().setTagComp(SpecTable.getSelectedRow());
-            currViewPanel.getSelectedSeries().AutoFit();
-            int cyc = SpecSeries.fitCrCycle+1;
-            int stp = SpecSeries.fitTotStep+1;
-            float accur = currViewPanel.getSelectedSeries().fitAccuracy;
-            FitAccurTxt.setText(String.format("Accuracy: %2.2f %s cycle %d step %d", accur*100,'%',cyc,stp));
-            FitAccurTxt.setEnabled(true);
-            FitAccurTxt.repaint();
-            //System.out.println("tag = "+currViewPanel.getSelectedSeries().TagComp + " begFit = " + currViewPanel.getSelectedSeries().BegFitComp);
+            tagSeries.setTagComp(SpecTable.getSelectedRow());
+            tagSeries.AutoFit();
+            updateFitAccurLabel(tagSeries.fitAccuracy,tagSeries.TagComp);
             updateDataInfo();
         
             currViewPanel.repaint();
@@ -1953,15 +2103,97 @@ public class NeuroSpex extends javax.swing.JFrame {
 
     private void DataFitThrough(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_DataFitThrough
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
-        currViewPanel.getSelectedSeries().selComp(0,1);
-        for (int j=0;j<15;j++){
-            currViewPanel.getSelectedSeries().selComp(j,0);
-            updateSeriesList(); //needed becase new series has been created
-            updateDataInfo();
-            currViewPanel.repaint();
-        }
+        currViewPanel.fitThrough();
+        
                  
     }//GEN-LAST:event_DataFitThrough
+    public int DataFitResultAction(SpecSeries tagSeries){
+        FitResAccurTxt.setText(String.format("Accuracy: %2.2f",100*tagSeries.fitAccuracy)+ "%");
+        FitResSweepTxt.setText(String.format("Sweep %d of %d",tagSeries.TagComp,tagSeries.BegFitComp-1));
+        float[] fRes = tagSeries.getCompAtIdx(tagSeries.TagComp).getFitResult();
+        //res[1+FitParam.nFitPar*(i+1)+i]=SpecComp[j].Amp;
+        int nCol, nRow, sel,i,j,nRes;
+        
+        if (fRes != null){
+            
+            nRes =fRes.length;
+            nCol=fitResTableModel.getColumnCount();
+            Object [] rowData=new Object[nCol];
+            nRow = fitResTableModel.getRowCount();
+            for (i=nRow-1;i>=0;i--)
+                fitResTableModel.removeRow(i);
+            nRow = (nRes-1)/(FitParam.nFitPar+1);
+            //System.out.println(String.format("nRes %d nRow %d",nRes,nRow));
+            
+            for (j=0;j<nRow;j++){
+                rowData[0]=j+1;
+                rowData[1]=fRes[1+j*(FitParam.nFitPar+1)+FitParam.nFitPar];
+                //System.out.println(String.format("Res: %3.3f  %3.3f %3.3f %3.3f",fRes[1],fRes[2],fRes[3],fRes[5]));
+                for(i=2;i<nCol;i++)
+                    rowData[i]=fRes[j*(FitParam.nFitPar+1)+i-1];
+                fitResTableModel.addRow(rowData);
+            }
+            
+            
+        }
+        FitResultCtrlDlg.setVisible(true);
+        FitResultCtrlDlg.toFront();
+        return fitResultUserAction;
+    }
+    public boolean getUserFitResult(SpecSeries tagSeries){
+        float[] fRes = tagSeries.getCompAtIdx(tagSeries.TagComp).getFitResult();
+        int nFitComp = tagSeries.getCompSize()-tagSeries.BegFitComp;
+        int nCol=fitResTableModel.getColumnCount();
+        int nRow = fitResTableModel.getRowCount();
+        if ( nCol>4 && nRow >= nFitComp){
+            for (int row = 0; row < nFitComp; row++){
+                fRes[1+row*(FitParam.nFitPar+1)+FitParam.nFitPar] = (float)FitResTable.getValueAt(row, 1);
+                for (int col=2; col<5; col++)
+                    fRes[row*(FitParam.nFitPar+1)+col-1] = (float)FitResTable.getValueAt(row, col);
+            } 
+            //System.out.println(String.format("input 1: %3.3f  %3.3f %3.3f %3.3f",fRes[1],fRes[2],fRes[3],fRes[5]));
+            if (fRes.length >6){
+                
+                fRes[0] = Math.max(fRes[5], fRes[10]);
+                //System.out.println(String.format("input 2: %3.3f  %3.3f %3.3f %3.3f",fRes[6],fRes[7],fRes[8],fRes[0]));
+            }
+            else
+                fRes[0] = fRes[5];
+            return true;
+        }
+        else
+            return false;
+        
+    }
+    private void FitResCtrlRetryBtn(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FitResCtrlRetryBtn
+        // TODO add your handling code here:
+        FitResultCtrlDlg.setVisible(false);
+        FitResultCtrlDlg.toBack();
+        fitResultUserAction = FIT_RETRY;
+    }//GEN-LAST:event_FitResCtrlRetryBtn
+
+    private void FitResCtrlDiscardBtn(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FitResCtrlDiscardBtn
+        // TODO add your handling code here:
+        FitResultCtrlDlg.setVisible(false);
+        FitResultCtrlDlg.toBack();
+        fitResultUserAction = FIT_DISCARD;
+    }//GEN-LAST:event_FitResCtrlDiscardBtn
+
+    private void FitResCtrlStopBtn(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FitResCtrlStopBtn
+        // TODO add your handling code here:
+        FitResultCtrlDlg.setVisible(false);
+        FitResultCtrlDlg.toBack();
+        FitResultCtrlDlg.dispose();
+        fitResultUserAction = FIT_STOP;
+    }//GEN-LAST:event_FitResCtrlStopBtn
+
+    private void FitResCtrlAcceptBtn(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FitResCtrlAcceptBtn
+        // TODO add your handling code here:
+        FitResultCtrlDlg.setVisible(false);
+        FitResultCtrlDlg.toBack();
+        //FitResultCtrlDlg.dispose();
+        fitResultUserAction = FIT_ACCEPT;
+    }//GEN-LAST:event_FitResCtrlAcceptBtn
 
     /**
      * @param args the command line arguments
@@ -2034,8 +2266,17 @@ public class NeuroSpex extends javax.swing.JFrame {
     private javax.swing.JLabel FitCompTxt;
     private javax.swing.JButton FitLstSqrBtn;
     private javax.swing.JTable FitParamTable;
+    private javax.swing.JLabel FitResAccurTxt;
+    private javax.swing.JButton FitResCtrlAcceptBtn;
+    private javax.swing.JButton FitResCtrlDiscardBtn;
+    private javax.swing.JButton FitResCtrlRetryBtn;
+    private javax.swing.JButton FitResCtrlStopBtn;
+    private javax.swing.JLabel FitResSweepTxt;
+    private javax.swing.JTable FitResTable;
+    private javax.swing.JDialog FitResultCtrlDlg;
     private javax.swing.JDialog FitSetDlg;
     private javax.swing.JMenuItem FitSettings;
+    private javax.swing.JLabel FitSweepNum;
     private javax.swing.JMenuItem FitThrough;
     private javax.swing.JMenuItem InsertSweep;
     private javax.swing.JTabbedPane MainTabViewPane;
@@ -2092,9 +2333,11 @@ public class NeuroSpex extends javax.swing.JFrame {
     private javax.swing.JScrollPane jScrollPane2;
     private javax.swing.JScrollPane jScrollPane3;
     private javax.swing.JScrollPane jScrollPane4;
+    private javax.swing.JScrollPane jScrollPane5;
     private javax.swing.JPopupMenu.Separator jSeparator1;
     private javax.swing.JSeparator jSeparator2;
     private javax.swing.JSeparator jSeparator3;
+    private javax.swing.JSeparator jSeparator4;
     private javax.swing.JSplitPane jSplitPane1;
     private javax.swing.JToggleButton xToggleBtn;
     private javax.swing.ButtonGroup xyBtnGroup;

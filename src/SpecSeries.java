@@ -4,6 +4,11 @@
  */
 
 import java.awt.Rectangle;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.ArrayList;
 import javax.swing.table.DefaultTableModel;
@@ -39,11 +44,16 @@ public class SpecSeries {
     public int      BegFitComp; // number of first model component to find, needed for interaction with Param Tables
     public boolean  IsSelected;
     
-    public float fitAccuracy;
+    //parameters to contorl the data fit workflow by user
+    public float fitAccuracy;     //accuracy by mean-squre-error, should not go over the limit set by user
+    public boolean fitAtBorder;   //one of fitting parameters reached the set limit
+    //parameters for flow control of fit mulitiple data sweeps
+    public boolean fitThroughStarted;
+    public boolean fitThroughPaused;
     //paramters for data fitting, prefix 'fit' replaces old  C++ version's 'crFitState.'
     public static float fitAccurL = (float)0.0001; //low limit for changes in accuracy
     public static float fitAccurH = (float)0.25; // maximum tolerated for 'good fit', can be changed by user
-    public static float fitAccurHRej = (float)0.29; // limit for automatic rejection, can be changed by user
+    public static float fitAccurHRej = (float)0.30; // limit for automatic rejection, can be changed by user
     public static float fitOldAccur = 0;
     public static float fitNewAccur = 0;
     public static float fitOldCycleAccur = 0;
@@ -84,6 +94,9 @@ public class SpecSeries {
         yMark=new float[NMarkMax];
         NMark=0;
         fitStepPar = new float[]{(float)0.18,(float)0.14,(float)0.4,(float)0.2,0,0,0,0}; //check if used
+        fitAtBorder = false;
+        fitThroughStarted = false;
+        fitThroughPaused = false;
 
     }
     //adding X-markers for data analysis
@@ -331,8 +344,9 @@ public class SpecSeries {
             if (SpecComp[idx].Select!=0 || ignoreSel)
                 SpecComp[idx].Clip(begSel, endSel, 15);
     }
-    public String data2text(boolean allPoints){ // copy the data as ASCII columns for the clipboard; 64 selected sweeps maximum
+    public String data2text(boolean allPoints, String delimiter){ // copy the data as ASCII columns for the clipboard 
         final int maxCopy = 64;
+        float[] crY;
         int i,j,iBeg,iEnd,nCopy;
         if (allPoints){
             iBeg=0; iEnd=NSPoint;
@@ -340,32 +354,36 @@ public class SpecSeries {
         else{
             iBeg=begSel;    iEnd=endSel;
         }
-        SpecSweep[] outSweep = new SpecSweep[maxCopy];
         String outStr="";
+        //title line
+        outStr+="time";
+        nCopy=0;
+        for (j=0;j<NSComp;j++){
+            if (SpecComp[j].Select>0){
+                nCopy++;
+                 outStr+= delimiter;
+                 outStr+= "YY"+String.valueOf(j+1);
+            }
+                
+        }
+        outStr+="\n";
+        float[][] outData = new float[iEnd-iBeg][nCopy+1];
+        for(i=iBeg; i<iEnd; i++)
+            outData[i-iBeg][0] = SpecBase[i];
         nCopy=0;
         for (j=0;j<NSComp;j++)
-            if (SpecComp[j].Select>0 && nCopy<maxCopy){
-                outSweep[nCopy]=SpecComp[j];
+            if (SpecComp[j].Select>0){
+                crY = SpecComp[j].getData();
                 nCopy++;
+                for(i=iBeg; i<iEnd; i++)
+                    outData[i-iBeg][nCopy] = crY[i];
             }
-        if (nCopy>0){
-            //title line
-            outStr+="time";
-            for (j=0;j<nCopy;j++){
-                    outStr+="\t";
-                    outStr+= "YY"+String.valueOf(j+1);
-                }
-                outStr+="\n";
-            for (i=iBeg;i<iEnd;i++){
-                outStr+= String.valueOf(SpecBase[i]);
-                for (j=0;j<nCopy;j++){
-                    outStr+="\t";
-                    outStr+= String.valueOf(outSweep[j].getYdata(i));
-                }
-                outStr+="\n";
+        for(i=iBeg; i<iEnd; i++){
+            for(j=0; j<nCopy; j++){
+                outStr+=String.format("%f%s",outData[i-iBeg][j],delimiter);
             }
+            outStr+=String.format("%f%s",outData[i-iBeg][nCopy],"\n");
         }
-        
         return outStr;
     }
     
@@ -390,6 +408,8 @@ public class SpecSeries {
         
 	return jSel;
     }
+    // methods finds spurious signals ("peaks") for tagged data sweep ("component") according current detection settings (global parameters) spec
+    // returns accuracy of approximation of data with set of peaks and copies X-location of peaks into provided array locX
     public float FindPeaks(int tagComp, float[] locX){
         int Count,j,i,jSel, newMode;
         float[] peakLoc;
@@ -453,6 +473,10 @@ public class SpecSeries {
         return Sigma;
     }
     
+    // methods finds spurious signals ("peaks") for target sweep (tagComp) by calling FindPeaks method and
+    // appends the destination data series by the "cut-out" of the peak and some surrounding data samples (total span about 4 width of peak)
+    // returns number of peak detected and appended
+    // ! method re-uses locX array for each sweep (to decrease memory usage), so array should be allocated prior to calling this method
     public int GatherPeaks(int tagComp, SpecSeries destSeries, float[] locX){
         SpecSweep crPeakSweep;
         int j,jBeg,jEnd;
@@ -466,23 +490,24 @@ public class SpecSeries {
         for (j=BegFitComp; j< NSComp; j++){
             FitParam sweepParam = SpecComp[j].getFitParam();
             sweepParam.getPar(peakPar);
-            xPos = peakPar[0];
-            jBeg = SpecComp[j].getNearestIdx(xPos-xShift);
             crPeakSweep = destSeries.createComp(destN);
-            if (jBeg+destN > NSPoint){
-                
-                jBeg = NSPoint - destN;
-                peakPar[0] = xShift*4 - (SpecBase[NSPoint-1]-xPos);
-                //fit param - Beg = xPos - xBase[jBeg]
-                System.out.print("x pos: "+ peakPar[0]);
-                sweepParam.getLimL(peakPar);
-                System.out.print(" lim low: "+ peakPar[2]);
-                sweepParam.getLimH(peakPar);
-                System.out.println(" lim high: "+ peakPar[2]);
+            xPos = peakPar[0];
+            if (xPos <= xShift){
+                jBeg = 0;
             }
             else {
-                peakPar[0] = xShift;
-            }
+                jBeg = SpecComp[j].getNearestIdx(xPos-xShift);
+                if (jBeg+destN > NSPoint){
+
+                    jBeg = NSPoint - destN;
+                    peakPar[0] = xShift*4 - (SpecBase[NSPoint-1]-xPos);
+                    //fit param - Beg = xPos - xBase[jBeg]
+                }
+                else {
+                    peakPar[0] = xShift;
+                }
+            }   
+            //System.out.println("x pos: "+ peakPar[0]);
             sweepParam.setPar(peakPar);
             sweepParam.getLimH(peakPar);
             peakPar[0] = xShift*4;
@@ -505,9 +530,6 @@ public class SpecSeries {
         boolean fitStop = true;
         boolean fixGrad[] = new boolean[FitParam.nFitPar]; // for some types of curves, altering some parameters is not needed
         float GradPar[][] = new float[FitParam.nFitPar][64];
-        //float GradWid[] = new float[64];
-        //float GradSplit[] = new float[64];
-        //float GradMix[] = new float[64];
         float stepVal[] = new float[FitParam.nFitPar];
         double GradModulus[] = new double [FitParam.nFitPar];
         int j,i,par_idx,Mode;
@@ -525,8 +547,6 @@ public class SpecSeries {
                     crParam = SpecComp[j].getFitParam();
                     //crParam.setStep(fitStepPar);
                     crParam.getStep(stepVal,fitStepRel);
-                    //System.out.print("Step M: "+stepVal[0]);
-                    //System.out.println("   Step W: "+stepVal[1]);
                     Mode = crParam.getMode();
                     fixGrad[FitParam.Mix] = !(Mode>=FitParam.STEPRESP)&&(Mode<=FitParam.SINUS);
                     fixGrad[FitParam.Split] = (Mode == FitParam.GAUSLOR) && (TestMode == FitParam.TEST_LLH);
@@ -602,6 +622,8 @@ public class SpecSeries {
         return true;
         
     }
+    // method fits the parameters of theoretical curves(components) using accelerated gradient optimization routine,
+    // in each cycle, fitting steps (calling FitStep method) continue until reaching a local minimum of error function
     public void AutoFit(){
         int i,j;
         boolean FitStop = true;
@@ -612,6 +634,11 @@ public class SpecSeries {
 	fitCrCycle = 0;
 	fitTotStep = 0;
 	fitStepProgress = true;
+        //using the preset fit parameters of the tagComp - for the signals detected by GatherPeaks method
+        FitParam tagFitParam = SpecComp[TagComp].getFitParam();
+        if ( tagFitParam != null)
+            SpecComp[BegFitComp].pasteFitParam(tagFitParam);
+
 	// remember steps
         if (fitParamInternal)
             for(j=BegFitComp;j<NSComp;j++)
@@ -747,7 +774,21 @@ public class SpecSeries {
             return -1;
 	}
     }
-    
+    //method check if fit results are at preset limits of main parameters or amplitude of fitted curve is too small
+    public boolean checkFitAtBorder(){
+        int j,i;
+        float[] scan = new float[3];
+        SpecComp[TagComp].Scan(scan, 0, 30);
+        float sdn = scan[1]*findSigYlow/4;
+
+        boolean checkRes = false;
+        for (j=BegFitComp;j<NSComp;j++){
+            for(i=0;i<3;i++)
+                checkRes = checkRes || SpecComp[j].getFitParam().parAtLimAtIdx(i);
+            checkRes = checkRes || (SpecComp[j].Amp < sdn);
+        }
+        return checkRes;
+    }
     public static String makeParsable(String dataStr){
         String outStr=new String();
         char outChar; 
@@ -1034,6 +1075,31 @@ public class SpecSeries {
         else
             return false;
     }
+    //converts the fit results  to the parameters of theoretical curves
+    //using the same alignment as in SpecSweep FitResult, parameters high and low limits do not change,fitRes amplitudes are ignored
+    //used to pass the parameters during FitThrough routine to re-try the autoFit
+    public boolean convertFitResult2Par(float[] fitRes){
+        int valIdx,j,count;
+        if( fitRes.length >=FitParam.nFitPar+2 && BegFitComp < NSComp){
+            FitParam tagFitParam = SpecComp[TagComp].getFitParam();
+            if ( tagFitParam != null)
+                for(valIdx=0; valIdx<FitParam.nFitPar; valIdx++)
+                    tagFitParam.setValAtIdx(valIdx, fitRes[1+valIdx]);
+            j = BegFitComp;
+            count = 1;
+            while( j<NSComp && count < fitRes.length){
+                for(valIdx=0; valIdx<FitParam.nFitPar; valIdx++){
+                    SpecComp[j].getFitParam().setValAtIdx(valIdx, fitRes[1+(j-BegFitComp)*(FitParam.nFitPar+1)+valIdx]);
+
+                }
+                j++;
+                count += FitParam.nFitPar+1;
+            }
+            return true;  
+        }
+        else
+            return false;
+    }
     // returns -1 if sweep index does not exist, 0 - if sweep is not selected
     public int getSweepTableData(Object[] rowData, int sweepIdx){
         //System.out.println("table row "+sweepIdx);
@@ -1062,7 +1128,7 @@ public class SpecSeries {
             if (SpecComp[sweepIdx].nFitResult>0){
                 float[] fitRes = SpecComp[sweepIdx].getFitResult();
                 rowData[8] = fitRes[0]; rowData[9] = fitRes[2]; rowData[10] = fitRes[3]; rowData[11] = fitRes[5];
-                if (fitRes.length > 5){
+                if (fitRes.length > 6){
                     rowData[12] = fitRes[7]; rowData[13] = fitRes[8]; rowData[14] = fitRes[10];
                 }
             }
@@ -1102,18 +1168,61 @@ public class SpecSeries {
         }
         if(idx>0)
             SpecComp[idx].copyFitParam(destPar);
-        return idx;
+        return idx-BegFitComp;
     }
     public String getScanResult(boolean IgnoreSel){
         int idx, j;
         String outStr = new String();
         float[] res=new float[3];
         outStr+="time\t"+"mean\t"+"SD\t"+"Slope\n";
-        SpecComp[0].Scan(res, begSel, endSel);
-        outStr+=String.valueOf(SpecComp[1].recTime);
-        for (j=0;j<3;j++)
-            outStr+="\t"+String.valueOf(res[j]);
-        outStr+="\n";
+        for (idx = 0; idx < NSComp; idx++){
+            if (SpecComp[idx].Select>0 || IgnoreSel){
+                SpecComp[idx].Scan(res, begSel, endSel);
+                outStr+=String.valueOf(SpecComp[idx].recTime);
+                for (j=0;j<3;j++)
+                    outStr+="\t"+String.valueOf(res[j]);
+                outStr+="\n";
+            }
+        } 
+        return outStr;
+    }
+    public String getFitResults(boolean[] fitResMask){
+        String outStr = "";
+        float [] fRes;
+        int idx,j,i,count;
+        count=0;
+        for  (idx=1; idx<BegFitComp;idx++){
+            fRes = SpecComp[idx].getFitResult();
+            if(fRes != null){
+                if(count==0){
+                    //title line
+                    outStr +="time";
+                    if (fitResMask[0]) 
+                        outStr += "\tFit Amp";
+                    for(j=0; j<NSComp-BegFitComp; j++){
+                        for(i=0; i<FitParam.nFitPar; i++){
+                            if (fitResMask[i+1])
+                                outStr +=  "\t"+SpecComp[BegFitComp+j].getFitParam().getParNameAtIdx(i);
+                        }
+                        if ((fRes.length < 7 && !fitResMask[0]) || (fRes.length > 6 && fitResMask[FitParam.nFitPar+1])) //if only only one fitting curve, no need in separate amplitude
+                            outStr += String.format("\tAmp%d",j+1);
+                    }
+                    outStr += "\n";
+                }
+                outStr+=String.valueOf(SpecComp[idx].recTime);
+                if (fitResMask[0] || (fRes.length < 7 && fitResMask[FitParam.nFitPar+1])) 
+                        outStr += "\t"+ String.valueOf(fRes[0]);
+                for (i=1;i<fRes.length;i++){
+                    j= 1+(i-1) % (FitParam.nFitPar+1);
+                    if(fitResMask[j])
+                        outStr += "\t"+String.valueOf(fRes[i]);
+                }
+                outStr += "\n";
+                count ++;
+            }
+        }
+        if(count ==0)
+            outStr += "no fit result available";
         return outStr;
     }
     
@@ -1207,6 +1316,53 @@ public class SpecSeries {
         
         
     }
+    //saving selected data sweeps a text file in parallel columns using delimiter, "," used for CSV files
+    public void saveComp2ASCII(File outFile, String delimiter){
+        float[] crY;
+        int i,j,iBeg,iEnd,nCopy;
+        iBeg=0; iEnd=NSPoint;
+        String outStr = "";
+        
+        outStr+="time";
+        nCopy=0;
+        for (j=0;j<NSComp;j++){
+            if (SpecComp[j].Select>0){
+                nCopy++;
+                 outStr+= delimiter;
+                 outStr+= "YY"+String.valueOf(j+1);
+            }
+        }
+        outStr+="\n";
+        //picking and convering the data into wide format
+        float[][] outData = new float[iEnd-iBeg][nCopy+1];
+        for(i=iBeg; i<iEnd; i++)
+            outData[i-iBeg][0] = SpecBase[i];
+        nCopy=0;
+        for (j=0;j<NSComp;j++)
+            if (SpecComp[j].Select>0){
+                crY = SpecComp[j].getData();
+                nCopy++;
+                for(i=iBeg; i<iEnd; i++)
+                    outData[i-iBeg][nCopy] = crY[i];
+            }
+        //wrting srting by string
+        try (BufferedWriter writer = Files.newBufferedWriter(outFile.toPath(),StandardOpenOption.CREATE,StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            writer.write(outStr, 0, outStr.length());
+            for(i=iBeg; i<iEnd; i++){
+                outStr = "";
+                for(j=0; j<nCopy; j++){
+                    outStr+=String.format("%f%s",outData[i-iBeg][j],delimiter);
+                }
+                outStr+=String.format("%f%s",outData[i-iBeg][nCopy],"\n");
+                writer.write(outStr, 0, outStr.length());
+            }
+            
+            writer.close();
+        } catch (IOException x) {
+            System.err.format("IOException: %s%n", x);
+        }
+    }
+    
     public void selClear(){
         begSel=-1; endSel=-1;
     }
