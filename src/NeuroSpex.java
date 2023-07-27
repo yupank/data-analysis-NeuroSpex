@@ -22,6 +22,7 @@ import javax.swing.JFileChooser;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.List;
 import javax.swing.Action;
@@ -42,6 +43,9 @@ public class NeuroSpex extends javax.swing.JFrame {
     private DefaultListModel seriesListModel,paramListModel;
     private DefaultTableModel specTableModel, fitResTableModel;
     private String    workDirectory;
+    private final  JFileChooser specFileChooser;
+        
+ 
     
     public static SpecSeries clbdSpec; // internal clipboard
     public static FitParam currFitPar; // for transfer from back- to front-end 
@@ -56,8 +60,9 @@ public class NeuroSpex extends javax.swing.JFrame {
     public NeuroSpex() {
         int i;
         initComponents();
-        setLocationRelativeTo (null);
-        workDirectory = null;
+        setLocationRelativeTo(null);
+        workDirectory = System.getProperty("user.home");
+        specFileChooser = new JFileChooser(workDirectory);
         selSpecViewIdx=0;
         totSpecViewTab=0;
         //MainTabViewPane.setUI(new BasicTabbedPaneUI());
@@ -353,6 +358,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         FileNew = new javax.swing.JMenuItem();
         FileOpen = new javax.swing.JMenuItem();
         FileSave = new javax.swing.JMenuItem();
+        FileSaveResults = new javax.swing.JMenuItem();
         FileClose = new javax.swing.JMenuItem();
         FileCloseAll = new javax.swing.JMenuItem();
         EditMenu = new javax.swing.JMenu();
@@ -1194,13 +1200,21 @@ public class NeuroSpex extends javax.swing.JFrame {
         });
         FileMenu.add(FileOpen);
 
-        FileSave.setText("Save");
+        FileSave.setText("Save Data");
         FileSave.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 FileSave(evt);
             }
         });
         FileMenu.add(FileSave);
+
+        FileSaveResults.setText("Save Results");
+        FileSaveResults.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                FileSaveResults(evt);
+            }
+        });
+        FileMenu.add(FileSaveResults);
 
         FileClose.setText("Close");
         FileClose.addActionListener(new java.awt.event.ActionListener() {
@@ -1425,12 +1439,52 @@ public class NeuroSpex extends javax.swing.JFrame {
     private void FileOpenActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileOpenActionPerformed
         // TODO add your handling code here:
         //currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
+        //Create a file chooser
         String extStr, titleStr;
+        int returnVal = specFileChooser.showOpenDialog(this);
+        if (returnVal == JFileChooser.APPROVE_OPTION) {
+            
+            File fileLoad = specFileChooser.getSelectedFile();
+            //System.out.println(fileLoad.getParent());
+            specFileChooser.setCurrentDirectory(fileLoad);
+            String nameStr=fileLoad.getName();
+            //workDirectory=fdLoad.getDirectory();
+            //finding and cutting the extension
+            int ptIdx=nameStr.lastIndexOf(".");
+            if (ptIdx>0){
+                extStr=nameStr.substring(ptIdx+1);
+                titleStr=nameStr.substring(0, ptIdx);
+            }
+            else { // no extension - will be treated as ASCII file
+                extStr ="";
+                titleStr = nameStr;
+            }
+            SpecPanel bufViewPanel = new SpecPanel((NeuroSpex)this);
+            if (extStr.equalsIgnoreCase("wcp"))
+                bufViewPanel.readWCPX(fileLoad);
+            else
+                if ((extStr.equalsIgnoreCase("FDR"))||(extStr.equalsIgnoreCase("EDR")))
+                    System.out.println("reading FDR");
+                else
+                    if ((extStr.equalsIgnoreCase("pul"))||(extStr.equalsIgnoreCase("pgf")))
+                        System.out.println("reading Pulse");
+            else
+                bufViewPanel.readASCII(fileLoad);
+            //System.out.println("ext:"+extStr+":");
+            bufViewPanel.setTitle(titleStr);
+            MainTabViewPane.addTab(titleStr, bufViewPanel);
+            MainTabViewPane.setSelectedIndex(totSpecViewTab);
+            totSpecViewTab++;
+            updateDataInfo();
+        }
+        /*
+        
         FileDialog fdLoad = new FileDialog (this, "Open File", FileDialog.LOAD);
  
         fdLoad.setVisible (true);
 
         File[] fileLoad=fdLoad.getFiles();
+        
         if(fileLoad.length>0){
             String nameStr=fileLoad[0].getName();
             workDirectory=fdLoad.getDirectory();
@@ -1467,21 +1521,40 @@ public class NeuroSpex extends javax.swing.JFrame {
         String fileName =fdLoad.getFile();
         //System.out.println("dir: "+workDirectory);
         //System.out.println("file: "+fileName);
+        */
 
     }//GEN-LAST:event_FileOpenActionPerformed
 
     private void FileSave(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileSave
-        // TODO add your handling code here:
-        
-        /* with FileChooser
-        JFileChooser fc = new JFileChooser();
-        int returnVal = fc.showSaveDialog(this);
+
+        // with FileChooser
+        //JFileChooser fc = new JFileChooser();
+        String nameStr, extStr;
+        int returnVal = specFileChooser.showSaveDialog(this);
 
         if (returnVal == JFileChooser.APPROVE_OPTION) {
-            File fileSave = fc.getSelectedFile();
-            currViewPanel.getSelectedSeries().saveComp2ASCII(fileSave, "\t");
+            File fileSave = specFileChooser.getSelectedFile();
+            specFileChooser.setCurrentDirectory(fileSave);
+            nameStr=fileSave.getName();
+            //finding and cutting the extension
+            int ptIdx=nameStr.lastIndexOf(".");
+            if (ptIdx>0){
+                extStr=nameStr.substring(ptIdx+1);              
+            }
+            else { // no extension - will be treated as ASCII file
+                extStr ="";
+
+            }
+            if (extStr.equalsIgnoreCase("csv")){
+                //saving in the csv format
+                currViewPanel.getSelectedSeries().saveComp2ASCII(fileSave, ",");
+            }
+            else
+                currViewPanel.getSelectedSeries().saveComp2ASCII(fileSave, "\t");
         }
-        */
+       
+        
+        /*
         FileDialog fdLoad = new FileDialog (this, "Save File", FileDialog.SAVE);
        
         fdLoad.setVisible (true);
@@ -1496,7 +1569,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         
         //else
             //System.out.println("no file");
-            
+        */    
     }//GEN-LAST:event_FileSave
 
     private void FileCloseActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileCloseActionPerformed
@@ -1558,6 +1631,10 @@ public class NeuroSpex extends javax.swing.JFrame {
     private void EditCopyRes(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_EditCopyRes
         // TODO add your handling code here:
         boolean[] resTableMask = new boolean[]{true,false,true,true,false,true}; //{totAmp,4 main FitParams,Amp}
+        resTableMask[0] = CopyTotAmp.isSelected();
+        resTableMask[5] = CopyAmp.isSelected();
+        resTableMask[2] = CopyTRise.isSelected();
+        resTableMask[3] = CopyTDec.isSelected();
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
         currViewPanel.transferHandler.copyResults2Sys(resTableMask);
     }//GEN-LAST:event_EditCopyRes
@@ -2195,6 +2272,33 @@ public class NeuroSpex extends javax.swing.JFrame {
         fitResultUserAction = FIT_ACCEPT;
     }//GEN-LAST:event_FitResCtrlAcceptBtn
 
+    private void FileSaveResults(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileSaveResults
+        boolean[] resTableMask = new boolean[]{true,false,true,true,false,true}; //{totAmp,4 main FitParams,Amp}
+        String nameStr, extStr;
+        int returnVal = specFileChooser.showSaveDialog(this);
+
+        if (returnVal == JFileChooser.APPROVE_OPTION) {
+            File fileSave = specFileChooser.getSelectedFile();
+            specFileChooser.setCurrentDirectory(fileSave);
+            nameStr=fileSave.getName();
+            //finding and cutting the extension
+            int ptIdx=nameStr.lastIndexOf(".");
+            if (ptIdx>0){
+                extStr=nameStr.substring(ptIdx+1);              
+            }
+            else { // no extension - will be treated as ASCII file
+                extStr ="";
+
+            }
+            if (extStr.equalsIgnoreCase("csv")){
+                //saving in the csv format
+                currViewPanel.getSelectedSeries().saveFitResults(fileSave, resTableMask, ",");
+            }
+            else
+                currViewPanel.getSelectedSeries().saveFitResults(fileSave, resTableMask, "\t");
+        }
+    }//GEN-LAST:event_FileSaveResults
+
     /**
      * @param args the command line arguments
      */
@@ -2261,6 +2365,7 @@ public class NeuroSpex extends javax.swing.JFrame {
     private javax.swing.JMenuItem FileNew;
     private javax.swing.JMenuItem FileOpen;
     private javax.swing.JMenuItem FileSave;
+    private javax.swing.JMenuItem FileSaveResults;
     private javax.swing.JLabel FitAccurTxt;
     private javax.swing.JButton FitAutoBtn;
     private javax.swing.JLabel FitCompTxt;

@@ -64,7 +64,7 @@ public class SpecTransferHandler extends TransferHandler {
         Clipboard clb=toolkit.getSystemClipboard();
         //String outValue = "here are some results for you";
         //Transferable transfer = new StringSelection(outValue);
-        Transferable transfer = new StringSelection(parentSpec.getSelectedSeries().getFitResults(resultMask));
+        Transferable transfer = new StringSelection(parentSpec.getSelectedSeries().getFitResults(resultMask,"\t"));
         try {
             clb.setContents(transfer,(ClipboardOwner)transfer);
         } catch (IllegalStateException ufe) {

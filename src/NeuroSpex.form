@@ -590,10 +590,18 @@
             </MenuItem>
             <MenuItem class="javax.swing.JMenuItem" name="FileSave">
               <Properties>
-                <Property name="text" type="java.lang.String" value="Save"/>
+                <Property name="text" type="java.lang.String" value="Save Data"/>
               </Properties>
               <Events>
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="FileSave"/>
+              </Events>
+            </MenuItem>
+            <MenuItem class="javax.swing.JMenuItem" name="FileSaveResults">
+              <Properties>
+                <Property name="text" type="java.lang.String" value="Save Results"/>
+              </Properties>
+              <Events>
+                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="FileSaveResults"/>
               </Events>
             </MenuItem>
             <MenuItem class="javax.swing.JMenuItem" name="FileClose">

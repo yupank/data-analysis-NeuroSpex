@@ -1186,7 +1186,7 @@ public class SpecSeries {
         } 
         return outStr;
     }
-    public String getFitResults(boolean[] fitResMask){
+    public String getFitResults(boolean[] fitResMask, String delimiter){
         String outStr = "";
         float [] fRes;
         int idx,j,i,count;
@@ -1197,25 +1197,34 @@ public class SpecSeries {
                 if(count==0){
                     //title line
                     outStr +="time";
-                    if (fitResMask[0]) 
-                        outStr += "\tFit Amp";
+                    //if (fitResMask[0]){
+                    if (fitResMask[0] || (fRes.length < 7 && fitResMask[FitParam.nFitPar+1])){
+                        //outStr += "\tFit Amp";
+                        outStr += delimiter;
+                        outStr += "FitAmp";
+                    }
                     for(j=0; j<NSComp-BegFitComp; j++){
                         for(i=0; i<FitParam.nFitPar; i++){
                             if (fitResMask[i+1])
-                                outStr +=  "\t"+SpecComp[BegFitComp+j].getFitParam().getParNameAtIdx(i);
+                                //outStr +=  "\t"+SpecComp[BegFitComp+j].getFitParam().getParNameAtIdx(i);
+                                outStr +=  delimiter+SpecComp[BegFitComp+j].getFitParam().getParNameAtIdx(i);
                         }
-                        if ((fRes.length < 7 && !fitResMask[0]) || (fRes.length > 6 && fitResMask[FitParam.nFitPar+1])) //if only only one fitting curve, no need in separate amplitude
-                            outStr += String.format("\tAmp%d",j+1);
+                        //if ((fRes.length < 7 && !fitResMask[0]) || (fRes.length > 6 && fitResMask[FitParam.nFitPar+1])) //if only only one fitting curve, no need in separate amplitude
+                        if ( ((fRes.length < 7 && !fitResMask[0])||fRes.length > 6) && fitResMask[FitParam.nFitPar+1] ) //if only only one fitting curve, no need in separate amplitude
+                            //outStr += String.format("\tAmp%d",j+1);
+                            outStr += delimiter + String.format("Amp%d",j+1);
                     }
                     outStr += "\n";
                 }
                 outStr+=String.valueOf(SpecComp[idx].recTime);
                 if (fitResMask[0] || (fRes.length < 7 && fitResMask[FitParam.nFitPar+1])) 
-                        outStr += "\t"+ String.valueOf(fRes[0]);
+                        //outStr += "\t"+ String.valueOf(fRes[0]);
+                        outStr += delimiter + String.valueOf(fRes[0]);
                 for (i=1;i<fRes.length;i++){
                     j= 1+(i-1) % (FitParam.nFitPar+1);
                     if(fitResMask[j])
-                        outStr += "\t"+String.valueOf(fRes[i]);
+                        //outStr += "\t"+String.valueOf(fRes[i]);
+                        outStr += delimiter + String.valueOf(fRes[i]);
                 }
                 outStr += "\n";
                 count ++;
@@ -1345,7 +1354,7 @@ public class SpecSeries {
                 for(i=iBeg; i<iEnd; i++)
                     outData[i-iBeg][nCopy] = crY[i];
             }
-        //wrting srting by string
+        //wrting string by string
         try (BufferedWriter writer = Files.newBufferedWriter(outFile.toPath(),StandardOpenOption.CREATE,StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
             writer.write(outStr, 0, outStr.length());
             for(i=iBeg; i<iEnd; i++){
@@ -1363,6 +1372,17 @@ public class SpecSeries {
         }
     }
     
+    // saving fit results in a text/CSV file using delimiter provided
+    public void saveFitResults(File outFile, boolean[] fitResMask, String delimiter){
+        //wrting all results in one string
+        try (BufferedWriter writer = Files.newBufferedWriter(outFile.toPath(),StandardOpenOption.CREATE,StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            String outStr = getFitResults(fitResMask, delimiter);
+            writer.write(outStr, 0, outStr.length());
+            writer.close();
+        } catch (IOException x) {
+            System.err.format("IOException: %s%n", x);
+        }
+    }
     public void selClear(){
         begSel=-1; endSel=-1;
     }
