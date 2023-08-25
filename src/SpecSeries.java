@@ -1197,33 +1197,26 @@ public class SpecSeries {
                 if(count==0){
                     //title line
                     outStr +="time";
-                    //if (fitResMask[0]){
                     if (fitResMask[0] || (fRes.length < 7 && fitResMask[FitParam.nFitPar+1])){
-                        //outStr += "\tFit Amp";
                         outStr += delimiter;
                         outStr += "FitAmp";
                     }
                     for(j=0; j<NSComp-BegFitComp; j++){
                         for(i=0; i<FitParam.nFitPar; i++){
                             if (fitResMask[i+1])
-                                //outStr +=  "\t"+SpecComp[BegFitComp+j].getFitParam().getParNameAtIdx(i);
                                 outStr +=  delimiter+SpecComp[BegFitComp+j].getFitParam().getParNameAtIdx(i);
                         }
-                        //if ((fRes.length < 7 && !fitResMask[0]) || (fRes.length > 6 && fitResMask[FitParam.nFitPar+1])) //if only only one fitting curve, no need in separate amplitude
                         if ( ((fRes.length < 7 && !fitResMask[0])||fRes.length > 6) && fitResMask[FitParam.nFitPar+1] ) //if only only one fitting curve, no need in separate amplitude
-                            //outStr += String.format("\tAmp%d",j+1);
                             outStr += delimiter + String.format("Amp%d",j+1);
                     }
                     outStr += "\n";
                 }
                 outStr+=String.valueOf(SpecComp[idx].recTime);
                 if (fitResMask[0] || (fRes.length < 7 && fitResMask[FitParam.nFitPar+1])) 
-                        //outStr += "\t"+ String.valueOf(fRes[0]);
                         outStr += delimiter + String.valueOf(fRes[0]);
                 for (i=1;i<fRes.length;i++){
                     j= 1+(i-1) % (FitParam.nFitPar+1);
                     if(fitResMask[j])
-                        //outStr += "\t"+String.valueOf(fRes[i]);
                         outStr += delimiter + String.valueOf(fRes[i]);
                 }
                 outStr += "\n";
@@ -1246,12 +1239,9 @@ public class SpecSeries {
         int NN=destSpec.NSComp;
         for (int j=0;j<NN;j++)
             if (destSpec.SpecComp[j].Select>0 || ignoreSel){
-                //System.out.println("psting j= "+j);
                 pasteComp(destSpec.SpecComp[j]);
                 SpecComp[NSComp-1].Select=1;
             }
-        //Average();
-        //selComp(0,1);
     }
     public void pasteComp(SpecSweep destComp){
         int i;
