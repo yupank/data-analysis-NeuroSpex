@@ -396,9 +396,6 @@
         </Property>
         <Property name="modal" type="boolean" value="true"/>
         <Property name="name" type="java.lang.String" value="fitResultDialog" noResource="true"/>
-        <Property name="preferredSize" type="java.awt.Dimension" editor="org.netbeans.beaninfo.editors.DimensionEditor">
-          <Dimension value="[348, 190]"/>
-        </Property>
         <Property name="size" type="java.awt.Dimension" editor="org.netbeans.beaninfo.editors.DimensionEditor">
           <Dimension value="[360, 200]"/>
         </Property>
@@ -758,6 +755,22 @@
               </Properties>
               <Events>
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="ToolsSmooth"/>
+              </Events>
+            </MenuItem>
+            <MenuItem class="javax.swing.JMenuItem" name="ToolsFilterLP">
+              <Properties>
+                <Property name="text" type="java.lang.String" value="Gaussian LP Filter"/>
+              </Properties>
+              <Events>
+                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="ToolsFilterLP"/>
+              </Events>
+            </MenuItem>
+            <MenuItem class="javax.swing.JMenuItem" name="ToolsRunAver">
+              <Properties>
+                <Property name="text" type="java.lang.String" value="Running average"/>
+              </Properties>
+              <Events>
+                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="ToolsRunningAverage"/>
               </Events>
             </MenuItem>
           </SubComponents>

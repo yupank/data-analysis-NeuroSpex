@@ -49,6 +49,8 @@ public class NeuroSpex extends javax.swing.JFrame {
     
     public static SpecSeries clbdSpec; // internal clipboard
     public static FitParam currFitPar; // for transfer from back- to front-end 
+    public static float filterBandwidth = 1;
+    public static float averagingWindow = 1;
     
     //variable for user reactions to low quality data fit
     public int fitResultUserAction;
@@ -376,6 +378,8 @@ public class NeuroSpex extends javax.swing.JFrame {
         ToolsClip = new javax.swing.JMenuItem();
         ToolsBackgSub = new javax.swing.JMenuItem();
         ToolsSmooth = new javax.swing.JMenuItem();
+        ToolsFilterLP = new javax.swing.JMenuItem();
+        ToolsRunAver = new javax.swing.JMenuItem();
         DataMenu = new javax.swing.JMenu();
         DataSlope = new javax.swing.JMenuItem();
         DataHist = new javax.swing.JMenuItem();
@@ -602,7 +606,6 @@ public class NeuroSpex extends javax.swing.JFrame {
         FitResultCtrlDlg.setBounds(new java.awt.Rectangle(990, 625, 360, 200));
         FitResultCtrlDlg.setModal(true);
         FitResultCtrlDlg.setName("fitResultDialog"); // NOI18N
-        FitResultCtrlDlg.setPreferredSize(new java.awt.Dimension(348, 190));
         FitResultCtrlDlg.setSize(new java.awt.Dimension(360, 200));
 
         FitResTable.setModel(new javax.swing.table.DefaultTableModel(
@@ -1337,6 +1340,22 @@ public class NeuroSpex extends javax.swing.JFrame {
         });
         ToolsMenu.add(ToolsSmooth);
 
+        ToolsFilterLP.setText("Gaussian LP Filter");
+        ToolsFilterLP.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                ToolsFilterLP(evt);
+            }
+        });
+        ToolsMenu.add(ToolsFilterLP);
+
+        ToolsRunAver.setText("Running average");
+        ToolsRunAver.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                ToolsRunningAverage(evt);
+            }
+        });
+        ToolsMenu.add(ToolsRunAver);
+
         jMenuBar1.add(ToolsMenu);
 
         DataMenu.setText("Data analysis");
@@ -2054,7 +2073,7 @@ public class NeuroSpex extends javax.swing.JFrame {
 
     private void ToolsSmooth(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ToolsSmooth
         // TODO add your handling code here:
-         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
+        currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
         if (currViewPanel!=null){
             int idx=SpecTable.getSelectedRow();
             currViewPanel.getSelectedSeries().Smooth(idx,(float) 0.01);
@@ -2299,6 +2318,41 @@ public class NeuroSpex extends javax.swing.JFrame {
         }
     }//GEN-LAST:event_FileSaveResults
 
+    private void ToolsFilterLP(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ToolsFilterLP
+
+        String userInput;
+        String initValues = String.format("%3.3f", filterBandwidth);
+        userInput = (String)JOptionPane.showInputDialog(this,
+           "bandwith (X-units)","Gaussian low-pass filter",
+            JOptionPane.PLAIN_MESSAGE,null,null,initValues);
+        filterBandwidth = Float.valueOf(userInput);
+        if (currViewPanel!=null){
+            int idx=SpecTable.getSelectedRow();
+            currViewPanel.getSelectedSeries().runFilter(idx, filterBandwidth, 0);
+            updateDataInfo();
+            currViewPanel.resetScaleY(false,true);
+            currViewPanel.repaint();
+        }
+            
+    }//GEN-LAST:event_ToolsFilterLP
+
+    private void ToolsRunningAverage(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ToolsRunningAverage
+
+        String userInput;
+        String initValues = String.format("%3.3f", averagingWindow);
+        userInput = (String)JOptionPane.showInputDialog(this,
+           "in window (x-units)","Running average",
+            JOptionPane.PLAIN_MESSAGE,null,null,initValues);
+        averagingWindow = Float.valueOf(userInput);
+        if (currViewPanel!=null){
+            int idx=SpecTable.getSelectedRow();
+            currViewPanel.getSelectedSeries().runFilter(idx, averagingWindow, 1);
+            updateDataInfo();
+            currViewPanel.resetScaleY(false,true);
+            currViewPanel.repaint();
+        }
+    }//GEN-LAST:event_ToolsRunningAverage
+
     /**
      * @param args the command line arguments
      */
@@ -2392,7 +2446,9 @@ public class NeuroSpex extends javax.swing.JFrame {
     private javax.swing.JLabel SpecTitleTxt;
     private javax.swing.JMenuItem ToolsBackgSub;
     private javax.swing.JMenuItem ToolsClip;
+    private javax.swing.JMenuItem ToolsFilterLP;
     private javax.swing.JMenu ToolsMenu;
+    private javax.swing.JMenuItem ToolsRunAver;
     private javax.swing.JMenuItem ToolsSmooth;
     private javax.swing.JButton axisLeftBtn;
     private javax.swing.JButton axisMinBtn;

@@ -1490,10 +1490,25 @@ public class SpecSeries {
                 return 0;
         }
     }
+    public void runFilter(int nCurve, float bandwidth, int Mode) {
+	
+	if (nCurve >=0 && nCurve < NSComp){
+            //SpecComp[nCurve].polyLineApprox(SpecComp[nCurve], begSel, endSel, 32);
+            if (Mode == 0)
+                SpecComp[nCurve].kernelAverage(SpecComp[0], bandwidth);
+            else
+                SpecComp[nCurve].runningAverage(SpecComp[0], bandwidth);
+        }
+        //SpecComp[nCurve].Zero = SpecComp[nCurve].minVal();
+        //SpecComp[nCurve].Amp = SpecComp[nCurve].maxVal()-SpecComp[nCurve].Zero;
+    }
     public void Smooth(int nCurve,float Fraction) {
 	
 	if (nCurve >=0 && nCurve < NSComp){
             SpecComp[nCurve].SmoothCut(begSel, endSel, Fraction);
+            //SpecComp[nCurve].SmoothLong(begSel, endSel, Fraction);
+            //SpecComp[nCurve].polyLineApprox(SpecComp[nCurve], begSel, endSel, 32);
+            //SpecComp[nCurve].kernelAverage(SpecComp[0], (float)7.5);
         }
         //SpecComp[nCurve].Zero = SpecComp[nCurve].minVal();
         //SpecComp[nCurve].Amp = SpecComp[nCurve].maxVal()-SpecComp[nCurve].Zero;

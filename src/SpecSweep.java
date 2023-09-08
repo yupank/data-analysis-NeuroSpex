@@ -381,10 +381,11 @@ public class SpecSweep {
         if (endPoint > NPoint-2) endPoint = NPoint-2;
         if (begPoint < 1) begPoint = 1;
         if (endPoint - begPoint > 100){
-            for (jBeg = begPoint;jBeg<=endPoint;jBeg+=64){
-                jEnd = jBeg+64;
+            for (jBeg = begPoint;jBeg<=endPoint;jBeg+=32){
+                jEnd = jBeg+32;
                 if (jEnd > endPoint) jEnd = endPoint;
-                SmoothCut(jBeg-1,jEnd,Fraction);
+                //SmoothCut(jBeg-1,jEnd,Fraction);
+                Clip(jBeg-1,jEnd,10);
             }
             
         }
@@ -414,7 +415,7 @@ public class SpecSweep {
             destPar.setParam(Param);
         
     }
-    // this method copies the data from tagSweep strting from tagged sample index, 
+    // this method copies the data from tagSweep starting from tagged sample index, 
     // method is used for breaking long recordings into chewabale pieces and cutting-out spurious signals   
     public int copyDataAtIdx(SpecSweep tagSweep, int tagIdx){
         int count = 0;
@@ -587,6 +588,49 @@ public class SpecSweep {
     
     public int getSize(){ return NPoint;}; 
     
+    //computes the running average using weights calulated with Gaussian kernel
+    //and puts the calulated values into outSweep, if outSweep is null, data is written over
+    //function is used for noise filtering and waveform smoothing
+    public void kernelAverage(SpecSweep outSweep, float kernel){
+        float[] outY, aveY;
+        aveY = new float[NPoint];
+        float currS, gsK, gsSum, dX;
+        int jStep, jP, iK, count;
+        
+        jStep = (int)(2.5*NPoint*kernel/(xBase[NPoint-1]-xBase[0]));
+        if ( jStep < 1 ) jStep=0;
+        for(jP=0; jP<NPoint; jP++){
+            currS=0; count=0; gsSum = 0; gsK = 1; //init
+            //going forward
+            iK = 0; 
+            while(iK<=jStep && jP+iK<NPoint && gsK > 0.03){
+                dX = (xBase[jP+iK]-xBase[jP])/kernel;
+                gsK = (float)Math.exp(-dX*dX);
+                currS += Data[jP+iK]*gsK;
+                gsSum +=gsK;
+                count++;
+                iK++;
+            }
+            //going backwards
+            gsK = 1;
+            iK=0;
+            while(iK<=jStep && jP-iK>=0 && gsK > 0.03){
+                dX = (xBase[jP-iK]-xBase[jP])/kernel;
+                gsK = (float)Math.exp(-dX*dX);
+                currS += Data[jP-iK]*gsK;
+                gsSum +=gsK;
+                count++;
+                iK++;
+            }
+            //normalizing
+            aveY[jP] = currS/gsSum;
+        }
+        if (outSweep == null) outSweep = this;       
+        outY = outSweep.Data;
+        for (jP=0; jP<NPoint;jP++)
+            outY[jP] = aveY[jP];
+        outSweep.updateScale();
+    }
     
     public float maxVal(){
         float Extrem=Data[0];
@@ -690,6 +734,34 @@ public class SpecSweep {
         }
         else
             return false;
+    }
+    // calculates polynomial approximation for each nStep data points
+    // and puts the approximated data values into polySweep, if polySweep is null, data is written over
+    public void polyLineApprox(SpecSweep polySweep, int begPoint, int endPoint, int nSections){
+        int j, jBeg, jEnd, nStep;
+        float groundY;
+        float[] polyY, polyX;
+        float[] scan = new float[3];
+        if (polySweep != null){
+            polyY =  polySweep.Data;
+        }
+        else
+            polyY = Data;
+        polyX = xBase;
+        nStep = NPoint/nSections;
+        if (nStep < 5) nStep = 5;
+        if (nStep > 25) nStep = 25;
+        for (jBeg = begPoint; jBeg< endPoint; jBeg+= nStep){
+            groundY = polyY[jBeg];
+            jEnd = jBeg + nStep;
+            Scan(scan, jBeg, jEnd);
+            if (jEnd > endPoint + 2) jEnd = endPoint + 2;
+            if (jEnd > NPoint-1) jEnd = NPoint-1;
+            for (j = jBeg+1; j<= jEnd; j++){
+                polyY[j] = groundY - scan[2]*(polyX[j]-polyX[jBeg]);
+            }
+        }
+       
     }
     //passing negative amp makes to use own Zero and Amp
     public void Rescale(float zero, float amp){
@@ -826,7 +898,7 @@ public class SpecSweep {
         //Rescale(Zero,Amp);
         
     }
-    // gives simple average between two points; always returns some value
+    // gives simple average between two data points; always returns a value
     public float Scan(int BegPoint, int EndPoint){
         int i,jBeg,jEnd,count;
         float res;
@@ -844,6 +916,46 @@ public class SpecSweep {
         res/=count;
         return res;    
     }
+     //computes the running average over specified window (x-axis uints)
+    //and puts the calulated values into outSweep, if outSweep is null, data is written over
+    //function is used for noise filtering and waveform smoothing
+    public void runningAverage(SpecSweep outSweep, float window){
+        float[] outY, aveY;
+        aveY = new float[NPoint];
+        float currS, gsK, gsSum, dX;
+        int jStep, jP, iK, count;
+        
+        jStep = (int)(0.5*NPoint*window/(xBase[NPoint-1]-xBase[0]));
+
+        if (jStep > NPoint/8) jStep = NPoint/8;
+        if ( jStep < 1 ) jStep=0;
+        
+        for(jP=0; jP<NPoint; jP++){
+            currS=0; count=0; //init
+            //going forward
+            iK=0;
+            while(iK<=jStep && jP+iK<NPoint){
+                currS += Data[jP+iK];
+                count++;
+                iK++;
+            }
+            //going backwards
+            iK=1;
+            while(iK<=jStep && jP-iK>=0){
+                currS += Data[jP-iK];
+                count++;
+                iK++;
+            }
+            //normalizing
+            aveY[jP] = currS/count;
+        }
+        if (outSweep == null) outSweep = this;       
+        outY = outSweep.Data;
+        for (jP=0; jP<NPoint;jP++)
+            outY[jP] = aveY[jP];
+        outSweep.updateScale();
+    }
+    
     //reports basic statistics: res[0:2] = {mean, SD , slope}
     public boolean Scan(float[] res, int BegPoint, int EndPoint){
         //
@@ -902,7 +1014,8 @@ public class SpecSweep {
             }
             S=(MX*MY-2*jEnd*MXY)/(2*jEnd*MX2-MX*MX);
             // average with the "simple" slopes
-            res[2]=(float)(-0.7*S-0.3*S2);
+            //res[2]=(float)(-0.3*S-0.7*S2);
+            res[2]=(float)(-0.07*S-0.93*S2);
             return true;
         }
         else
