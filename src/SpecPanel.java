@@ -755,7 +755,7 @@ public class SpecPanel extends JPanel
         return (DataSetTitle);
     }
     public SpecSeries getDataSeries(int nSer){
-        if (nSer<nSeries)
+        if (nSer<nSeries && nSer >= 0)
             return dataSeries[nSer];
         else
             return null;
@@ -938,7 +938,7 @@ public class SpecPanel extends JPanel
     }
     
     public boolean readASCII (File readFile) {
-        String lineRead;
+        String lineRead, separStr;
         int nLine,row,col,nSweep,nPoint;
         List<String> lines;
         lines=new ArrayList<String>(100);
@@ -959,16 +959,17 @@ public class SpecPanel extends JPanel
                 System.err.format("IOException: %s%n", x);
             }
             nLine=lines.size();
+
             if (nLine>1) {
-                //System.out.println(lines.get(1));
-                String[] numStr1=lines.get(0).split("\t",-1);
-                String[] numStr2=lines.get(1).split("\t",-1);
-                
+                //System.out.println(lines.get(0));
+
+                String[] numStr1=lines.get(0).split("[,\t]",-1);
+                String[] numStr2=lines.get(1).split("[,\t]",-1);
                 if (numStr1.length>=numStr2.length){
                     //creating new data series;
                     dataSeries[nSeries]= new SpecSeries();
                     dataSeries[nSeries].setTitle("series "+(nSeries+1));
-                 
+                    
                     if (dataSeries[nSeries].text2Data(lines)>1){
                         dataSeries[nSeries].IsSelected=true;
                         focusSer=nSeries;

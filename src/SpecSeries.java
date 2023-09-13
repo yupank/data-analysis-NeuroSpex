@@ -872,11 +872,11 @@ public class SpecSeries {
                 crChar=readChar+1;
             }
            
-            return text2Data(lines);
+            return text2Data(lines); // parsing the clipboard data
         }
         else return 0;
     }
-    public int text2Data(List<String> lines){  //parsing the tab-dilimited set of rows and converting to the data
+    public int text2Data(List<String> lines){  //parsing the tab- or comma-dilimited set of rows and converting to the data
         int col, row, nPoint, nCol,i,count;
         float[] crS, crY;
         String[] numStr1;
@@ -887,7 +887,7 @@ public class SpecSeries {
             // skipping the non-parsable lines and detecting the parsable data columns
             nCol=0;
             for (row=0;row<4 && row<nPoint;row++){
-                numStr1=lines.get(row).split("\t",-1);
+                numStr1=lines.get(row).split("[,\t]",-1);
                 col=0;
                 for (i=0;i<numStr1.length;i++){
                     //System.out.print(numStr1[i]);
@@ -906,7 +906,7 @@ public class SpecSeries {
                 count=0;
                 crS=SpecComp[0].getData();
                 for (row=0;row<nPoint;row++){
-                    numStr1=lines.get(row).split("\t",-1);
+                    numStr1=lines.get(row).split("[,\t]",-1);
                     dataStr=makeParsable(numStr1[0]);
                     
                     if (dataStr !=null){
