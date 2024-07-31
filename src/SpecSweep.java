@@ -458,7 +458,7 @@ public class SpecSweep {
         return FitResult;
     }
     public void setFitResult(float[] values){
-        //results are collection of component amplitude, followed by the conventional FitParams
+        //results are collection of component amplitude and fit parameters, followed by the conventional FitParams
         if (nFitResult < values.length ){
             FitResult = new float[values.length];
         }

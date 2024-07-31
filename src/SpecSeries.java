@@ -523,9 +523,10 @@ public class SpecSeries {
         return Count;
     }
     
-    // method performs a single cycle (several steps) of accelerated gradient optimization routine 
-    //which stops when accuracy improves lower than set limit or number of cycles reaches maximal limit
+    // method performs a single cycle (several steps) of accelerated gradient-descent optimization routine 
+    //which stops when accuracy improves less than set limit or number of cycles reaches maximal limit
     //method requires prior intialization using the static fit* parameters
+    //the data sweep used for fit is set by the TagComp property 
     public boolean FitStep(){
         boolean fitStop = true;
         boolean fixGrad[] = new boolean[FitParam.nFitPar]; // for some types of curves, altering some parameters is not needed
@@ -624,6 +625,7 @@ public class SpecSeries {
     }
     // method fits the parameters of theoretical curves(components) using accelerated gradient optimization routine,
     // in each cycle, fitting steps (calling FitStep method) continue until reaching a local minimum of error function
+    // the data to fit are taken as in the FitStep() method
     public void AutoFit(){
         int i,j;
         boolean FitStop = true;
@@ -853,7 +855,40 @@ public class SpecSeries {
         else
             return null;
     }
-    
+    public int collectResults(SpecSeries destSeries){
+        int nMax, resSize, i, j;
+        float[] crResult, crData;
+        nMax = 0;
+        resSize = 0;
+        for (i = 1; i < BegFitComp; i++){
+            if (SpecComp[i].nFitResult > 0){
+                nMax ++;
+                if (resSize < SpecComp[i].nFitResult)
+                    resSize = SpecComp[i].nFitResult;
+            }
+        }
+        if (resSize < 2*FitParam.nFitPar)
+            //avoiding redundancy of reported amplitudes
+            resSize = 5;
+        for (j=0; j < resSize; j++){
+            // time stamp parementer (Max) is already reportde as a recTime
+            if ((j != FitParam.Max+1) && (j != 1+2*FitParam.nFitPar+FitParam.Max)){
+                SpecSweep crComp = destSeries.createComp(nMax);
+                crData = crComp.getData();
+                for (i = 0; i < BegFitComp-1; i++){
+                    if (SpecComp[i+1].nFitResult > 0){
+                        crResult = SpecComp[i+1].getFitResult();
+                        crData[i] = crResult[j];
+                    }
+                    if (j==0)
+                        destSeries.SpecBase[i] = SpecComp[i+1].recTime;
+                }
+                crComp.updateScale();
+            }
+        }
+        System.out.println("total res: " + nMax*resSize);
+        return nMax*resSize;
+    }
     public int text2Data(String dataStr){ //converting the text data in the single String-form into the set of \n-delimited rows and passing them to other version of text2data()
         int readChar=0; int crChar=0;
         int size=dataStr.length();
@@ -931,7 +966,9 @@ public class SpecSeries {
                 for(col=0;col<NSComp;col++) {
                     SpecComp[col].trimTo(NSPoint);
                     SpecComp[col].updateScale();
-                    SpecComp[col].recTime = col;
+                    //avoiding x-overalap 
+                    SpecComp[col].recTime = col*(1+SpecBase[NSPoint-1]/1000);
+
                 }
 
             }
@@ -1510,8 +1547,7 @@ public class SpecSeries {
             //SpecComp[nCurve].polyLineApprox(SpecComp[nCurve], begSel, endSel, 32);
             //SpecComp[nCurve].kernelAverage(SpecComp[0], (float)7.5);
         }
-        //SpecComp[nCurve].Zero = SpecComp[nCurve].minVal();
-        //SpecComp[nCurve].Amp = SpecComp[nCurve].maxVal()-SpecComp[nCurve].Zero;
+
     }
     public void Subtrack(boolean ignoreSel){ 
         float Sigma=0;
@@ -1528,5 +1564,37 @@ public class SpecSeries {
             SpecComp[0].Amp=SpecComp[0].maxVal()-SpecComp[0].Zero;
         }	
         
+    }
+    public float widthAtLevel(int nCurve, double relLevel){
+        float x0, x1, yLevel;
+        float[] yData = BcgrComp.getData();
+        int swpIdx, k,j, grad;
+        if (nCurve >=0 && nCurve <NSComp)
+            swpIdx = nCurve;
+        else
+            swpIdx = 0;
+        BcgrComp.InitData(SpecComp[swpIdx]);
+        yLevel = BcgrComp.Zero + (float)relLevel*BcgrComp.Amp;
+        k = 0;
+        if ( yLevel < yData[k])
+            grad = -1;
+        else
+            grad = 1;
+        while ( grad*(yLevel - yData[k+1]) > 0 && k < NSPoint-1)
+            k++;
+        x0 = (SpecBase[k+1] + SpecBase[k])/2;
+        
+        j = NSPoint-1;
+        if ( yLevel < yData[j])
+            grad = -1;
+        else
+            grad = 1;
+        while ( grad*(yLevel - yData[j-1]) > 0 && j > k+1 )
+            j--;
+        if (j <= k+1)
+            j=NSPoint-1;
+        x1 = (SpecBase[j]+SpecBase[j-1])/2;
+        
+        return x1-x0;
     }
 }

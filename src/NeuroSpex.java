@@ -355,7 +355,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         FitAccurTxt = new javax.swing.JLabel();
         FitAutoBtn = new javax.swing.JButton();
         FitSweepNum = new javax.swing.JLabel();
-        jMenuBar1 = new javax.swing.JMenuBar();
+        mainMenuBar = new javax.swing.JMenuBar();
         FileMenu = new javax.swing.JMenu();
         FileNew = new javax.swing.JMenuItem();
         FileOpen = new javax.swing.JMenuItem();
@@ -390,6 +390,10 @@ public class NeuroSpex extends javax.swing.JFrame {
         DataPeaksAnalysis = new javax.swing.JMenuItem();
         FitSettings = new javax.swing.JMenuItem();
         FitThrough = new javax.swing.JMenuItem();
+        jSeparator5 = new javax.swing.JPopupMenu.Separator();
+        SignalML = new javax.swing.JMenu();
+        FitMLTrain = new javax.swing.JMenuItem();
+        FitMLTest = new javax.swing.JMenuItem();
 
         FitSetDlg.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
         FitSetDlg.setTitle("Peak Search and Analysis Settings");
@@ -1174,7 +1178,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         jPanel2.setLayout(jPanel2Layout);
         jPanel2Layout.setHorizontalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, 723, Short.MAX_VALUE)
+            .addComponent(jPanel3, javax.swing.GroupLayout.DEFAULT_SIZE, 723, Short.MAX_VALUE)
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1235,7 +1239,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         });
         FileMenu.add(FileCloseAll);
 
-        jMenuBar1.add(FileMenu);
+        mainMenuBar.add(FileMenu);
 
         EditMenu.setText("Edit");
 
@@ -1310,7 +1314,7 @@ public class NeuroSpex extends javax.swing.JFrame {
 
         EditMenu.add(CopyResMenu);
 
-        jMenuBar1.add(EditMenu);
+        mainMenuBar.add(EditMenu);
 
         ToolsMenu.setText("Tools");
         ToolsMenu.setToolTipText("");
@@ -1356,7 +1360,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         });
         ToolsMenu.add(ToolsRunAver);
 
-        jMenuBar1.add(ToolsMenu);
+        mainMenuBar.add(ToolsMenu);
 
         DataMenu.setText("Data analysis");
 
@@ -1420,10 +1424,26 @@ public class NeuroSpex extends javax.swing.JFrame {
             }
         });
         DataMenu.add(FitThrough);
+        DataMenu.add(jSeparator5);
 
-        jMenuBar1.add(DataMenu);
+        SignalML.setText("Signal classification");
 
-        setJMenuBar(jMenuBar1);
+        FitMLTrain.setText("Train");
+        SignalML.add(FitMLTrain);
+
+        FitMLTest.setText("Test");
+        FitMLTest.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                FitMLTest(evt);
+            }
+        });
+        SignalML.add(FitMLTest);
+
+        DataMenu.add(SignalML);
+
+        mainMenuBar.add(DataMenu);
+
+        setJMenuBar(mainMenuBar);
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
@@ -1458,8 +1478,9 @@ public class NeuroSpex extends javax.swing.JFrame {
     private void FileOpenActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileOpenActionPerformed
         // TODO add your handling code here:
         //currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
-        //Create a file chooser
         String extStr, titleStr;
+        /*
+        //Create a file chooser
         int returnVal = specFileChooser.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             
@@ -1496,7 +1517,7 @@ public class NeuroSpex extends javax.swing.JFrame {
             totSpecViewTab++;
             updateDataInfo();
         }
-        /*
+        */
         
         FileDialog fdLoad = new FileDialog (this, "Open File", FileDialog.LOAD);
  
@@ -1540,14 +1561,13 @@ public class NeuroSpex extends javax.swing.JFrame {
         String fileName =fdLoad.getFile();
         //System.out.println("dir: "+workDirectory);
         //System.out.println("file: "+fileName);
-        */
+        
 
     }//GEN-LAST:event_FileOpenActionPerformed
 
     private void FileSave(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileSave
 
-        // with FileChooser
-        //JFileChooser fc = new JFileChooser();
+        /*
         String nameStr, extStr;
         int returnVal = specFileChooser.showSaveDialog(this);
 
@@ -1572,8 +1592,8 @@ public class NeuroSpex extends javax.swing.JFrame {
                 currViewPanel.getSelectedSeries().saveComp2ASCII(fileSave, "\t");
         }
        
+        */
         
-        /*
         FileDialog fdLoad = new FileDialog (this, "Save File", FileDialog.SAVE);
        
         fdLoad.setVisible (true);
@@ -1588,7 +1608,7 @@ public class NeuroSpex extends javax.swing.JFrame {
         
         //else
             //System.out.println("no file");
-        */    
+          
     }//GEN-LAST:event_FileSave
 
     private void FileCloseActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FileCloseActionPerformed
@@ -2125,7 +2145,7 @@ public class NeuroSpex extends javax.swing.JFrame {
     }//GEN-LAST:event_FitAuto
 
     private void DataFindPeaks(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_DataFindPeaks
-        // TODO add your handling code here:
+
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
         if (currViewPanel!=null){
             //currViewPanel.getSelectedSeries().Subtrack(false);
@@ -2200,6 +2220,10 @@ public class NeuroSpex extends javax.swing.JFrame {
     private void DataFitThrough(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_DataFitThrough
         currViewPanel = (SpecPanel)MainTabViewPane.getSelectedComponent();
         currViewPanel.fitThrough();
+        updateSeriesList(); //needed becase new series with results timeCourse has been created
+        updateDataInfo();
+        currViewPanel.resetScaleY(false,false);
+        currViewPanel.repaint();
         
                  
     }//GEN-LAST:event_DataFitThrough
@@ -2248,10 +2272,8 @@ public class NeuroSpex extends javax.swing.JFrame {
                     fRes[row*(FitParam.nFitPar+1)+col-1] = (float)FitResTable.getValueAt(row, col);
             } 
             //System.out.println(String.format("input 1: %3.3f  %3.3f %3.3f %3.3f",fRes[1],fRes[2],fRes[3],fRes[5]));
-            if (fRes.length >6){
-                
+            if (fRes.length >6){       
                 fRes[0] = Math.max(fRes[5], fRes[10]);
-                //System.out.println(String.format("input 2: %3.3f  %3.3f %3.3f %3.3f",fRes[6],fRes[7],fRes[8],fRes[0]));
             }
             else
                 fRes[0] = fRes[5];
@@ -2353,6 +2375,16 @@ public class NeuroSpex extends javax.swing.JFrame {
         }
     }//GEN-LAST:event_ToolsRunningAverage
 
+    private void FitMLTest(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_FitMLTest
+
+        // testing the DL-model of signal classification
+        if (currViewPanel!=null){
+            int idx=SpecTable.getSelectedRow();
+            float wid = currViewPanel.getSelectedSeries().widthAtLevel(idx, 0.5);
+            System.out.println("widths: "+wid);
+        }
+    }//GEN-LAST:event_FitMLTest
+
     /**
      * @param args the command line arguments
      */
@@ -2424,6 +2456,8 @@ public class NeuroSpex extends javax.swing.JFrame {
     private javax.swing.JButton FitAutoBtn;
     private javax.swing.JLabel FitCompTxt;
     private javax.swing.JButton FitLstSqrBtn;
+    private javax.swing.JMenuItem FitMLTest;
+    private javax.swing.JMenuItem FitMLTrain;
     private javax.swing.JTable FitParamTable;
     private javax.swing.JLabel FitResAccurTxt;
     private javax.swing.JButton FitResCtrlAcceptBtn;
@@ -2442,6 +2476,7 @@ public class NeuroSpex extends javax.swing.JFrame {
     private javax.swing.JList<String> ParamList;
     private javax.swing.JMenuItem PasteSweep;
     private javax.swing.JList<String> SeriesList;
+    private javax.swing.JMenu SignalML;
     private javax.swing.JTable SpecTable;
     private javax.swing.JLabel SpecTitleTxt;
     private javax.swing.JMenuItem ToolsBackgSub;
@@ -2485,7 +2520,6 @@ public class NeuroSpex extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel7;
     private javax.swing.JLabel jLabel8;
     private javax.swing.JLabel jLabel9;
-    private javax.swing.JMenuBar jMenuBar1;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPanel jPanel3;
@@ -2499,7 +2533,9 @@ public class NeuroSpex extends javax.swing.JFrame {
     private javax.swing.JSeparator jSeparator2;
     private javax.swing.JSeparator jSeparator3;
     private javax.swing.JSeparator jSeparator4;
+    private javax.swing.JPopupMenu.Separator jSeparator5;
     private javax.swing.JSplitPane jSplitPane1;
+    private javax.swing.JMenuBar mainMenuBar;
     private javax.swing.JToggleButton xToggleBtn;
     private javax.swing.ButtonGroup xyBtnGroup;
     private javax.swing.JToggleButton yToggleBtn;

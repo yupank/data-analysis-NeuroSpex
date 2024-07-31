@@ -151,7 +151,7 @@ public class SpecPanel extends JPanel
     }
     
     
-    //adding data series of supplied size for reading the data into it
+    //adding data series of supplied sample(sweep) size for reading the data into it
     public SpecSweep addSeries(int destSize, String namePrefix)
     {
        int i,j,n;
@@ -502,6 +502,19 @@ public class SpecPanel extends JPanel
         updateSweeps();
         
     }
+    // collects the results of data fit (if any) of currently selected Series
+    // by calling the appropriate method
+    // and puts them in the new series
+    public void collectFitResults(){
+        SpecSeries tagSeries = getSelectedSeries();
+        addSeries();
+        if( tagSeries.collectResults(dataSeries[nSeries-1]) >2 ){
+            dataSeries[nSeries-1].setTitle("TC:"+ tagSeries.getTitle());
+            dataSeries[nSeries-1].IsSelected = true;
+        }
+        else
+            removeSeries(nSeries-1);
+    }
     public boolean detectPeaks(){
         SpecSeries tagSeries = getSelectedSeries();
         int i,j,nDestPoint, nTagPoint, nPeak;
@@ -654,6 +667,7 @@ public class SpecPanel extends JPanel
                 //reached the end of recorings
                 fitStop = true; 
         }
+        collectFitResults();
     }  
     public void drawAxes(Graphics g){
         double tick1, tick2;
